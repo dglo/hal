@@ -40,17 +40,27 @@
 #define   DOM_FPGA_TEST_SIGNAL_ATWD0        (0x00000001)
 /** take data from ATWD 0 trigger by discriminator */
 #define   DOM_FPGA_TEST_SIGNAL_ATWD0_DISC   (0x00000002)
+/** data read from ATWD 0 data buffer */
+#define   DOM_FPGA_TEST_SIGNAL_ATWD0_READ_DONE (0x00000004)
+/** Launches the ATWD0 when the on board LED is flashed */
+#define   DOM_FPGA_TEST_SIGNAL_ATWD0_LED      (0x00000008)
 /** take data from ATWD 1 */
 #define   DOM_FPGA_TEST_SIGNAL_ATWD1        (0x00000100)
 /** take data from ATWD 1 trigger from discriminator */
 #define   DOM_FPGA_TEST_SIGNAL_ATWD1_DISC   (0x00000200)
+/** data read from ATWD 1 data buffer */
+#define   DOM_FPGA_TEST_SIGNAL_ATWD1_READ_DONE (0x00000400)
+/** Launches the ATWD1 when the on board LED is flashed */
+#define   DOM_FPGA_TEST_SIGNAL_ATWD1_LED       (0x00000800)
+/** acquire data from ATWD0 and ATWD1 in ping pong mode */
+#define   DOM_FPGA_TEST_SIGNAL_ATWD_PING_PONG (0x00008000)
 /** acquire a fast adc signal */
 #define   DOM_FPGA_TEST_SIGNAL_FADC         (0x00010000)
 /** acquire a fast adc signal from discriminator */
 #define   DOM_FPGA_TEST_SIGNAL_FADC_DISC    (0x00020000)
-/** acquire a front end pulser */
+/** start front end pulser */
 #define   DOM_FPGA_TEST_SIGNAL_FE_PULSER    (0x01000000)
-/** acquire a single LED pulser */
+/** create a single LED pulser */
 #define   DOM_FPGA_TEST_SIGNAL_LED_PULSER   (0x04000000)
 /** create a test waveform for debugging -- into channel 3 of ATWD */
 #define   DOM_FPGA_TEST_SIGNAL_R2R_TRIANGLE      (0x10000000)
@@ -89,11 +99,11 @@
 #define DOM_FPGA_TEST_COMM (DOM_FPGA_TEST_BASE + 0x1008)
 
 /** send a triangle wave out comm dac */
-#define   DOM_FPGA_TEST_COMM_DAC_TRIANGLE (0x00000001)
+#define   DOM_FPGA_TEST_COMM_DAC_TRIANGLE     (0x00000001)
 /** send a square wave out comm dac */
-#define   DOM_FPGA_TEST_COMM_DAC_SQUARE   (0x00000002)
+#define   DOM_FPGA_TEST_COMM_DAC_SQUARE       (0x00000002)
 /** acquire a comm adc signal */
-#define   DOM_FPGA_TEST_COMM_ADC          (0x00000010)
+#define   DOM_FPGA_TEST_COMM_ADC              (0x00000010)
 /** ??? */
 #define   DOM_FPGA_TEST_COMM_RS_485_TX        (0x00000100)
 /** ??? */
@@ -203,6 +213,8 @@
 #define   DOM_FPGA_TEST_MISC_FL_TCK             (0x20000000)
 /** flasher board tdi */
 #define   DOM_FPGA_TEST_MISC_FL_TDI             (0x40000000)
+/** enable flasher board jtag signals */
+#define   DOM_FPGA_TEST_MISC_FL_EN_JTAG         (0x80000000)
 /*@}*/
 
 /**
@@ -214,11 +226,26 @@
 /*@{*/
 /** register addresss */
 #define DOM_FPGA_TEST_MISC_RESPONSE (DOM_FPGA_TEST_BASE + 0x101c)
-
+/** local coincidence down A */
+#define DOM_FPGA_TEST_MISC_RESPONSE_COINC_DOWN_A    0x00000100
+/** local coincidence down A BAR */
+#define DOM_FPGA_TEST_MISC_RESPONSE_COINC_DOWN_ABAR 0x00000200
+/** local coincidence down B */
+#define DOM_FPGA_TEST_MISC_RESPONSE_COINC_DOWN_B    0x00000400
+/** local coincidence down B BAR */
+#define DOM_FPGA_TEST_MISC_RESPONSE_COINC_DOWN_BBAR 0x00000800
+/** local coincidence up A */
+#define DOM_FPGA_TEST_MISC_RESPONSE_COINC_UP_A      0x00001000
+/** local coincidence up A BAR */
+#define DOM_FPGA_TEST_MISC_RESPONSE_COINC_UP_ABAR   0x00002000
+/** local coincidence up B */
+#define DOM_FPGA_TEST_MISC_RESPONSE_COINC_UP_B      0x00004000
+/** local coincidence up B BAR */
+#define DOM_FPGA_TEST_MISC_RESPONSE_COINC_UP_BBAR   0x00008000
 /** flasher board read */
-#define   DOM_FPGA_TEST_MISC_RESPONSE_FL_ATTN  (0x01000000)
+#define   DOM_FPGA_TEST_MISC_RESPONSE_FL_ATTN      (0x01000000)
 /** flasher board read */
-#define   DOM_FPGA_TEST_MISC_RESPONSE_FL_TD0   (0x10000000)
+#define   DOM_FPGA_TEST_MISC_RESPONSE_FL_TD0       (0x10000000)
 /*@}*/
 
 /**
@@ -283,27 +310,11 @@
  * \ingroup fpga_test_regs
  *
  * \brief We use the low 16 bits of this register to write the current
- * master test address (debug only).  We use bits 16-19 of this register
- * to write the front end pulser rate.  Bits 24-31 are used for the
- * flasher board interface...
+ * master test address (debug only).  
  */
 /*@{*/
 /** register addresss */
 #define DOM_FPGA_TEST_AHB_MASTER_TEST (DOM_FPGA_TEST_BASE + 0x1028)
-/** Trigger the flasher, assuming the capacitor is charged */
-#define DOM_FPGA_TEST_AHB_MASTER_TEST_FL_TRIGGER     0x01000000
-/** Flasher attention, interrupt request. */
-#define DOM_FPGA_TEST_AHB_MASTER_TEST_FL_ATTN        0x02000000
-/** Pretrigger, start charging the capacitor... */
-#define DOM_FPGA_TEST_AHB_MASTER_TEST_FL_PRE_TRIGGER 0x04000000
-/** JTAG tms */
-#define DOM_FPGA_TEST_AHB_MASTER_TEST_FL_TMS         0x10000000
-/** JTAG tck */
-#define DOM_FPGA_TEST_AHB_MASTER_TEST_FL_TCK         0x20000000
-/** JTAG tdi */
-#define DOM_FPGA_TEST_AHB_MASTER_TEST_FL_TDI         0x40000000
-/** JTAG tdo */
-#define DOM_FPGA_TEST_AHB_MASTER_TEST_FL_TDO         0x80000000
 
 /**
  * pulser rate values for bits 16-19...
@@ -334,7 +345,7 @@ enum DOMPulserRates {
  *
  * \brief This register contains control for the
  * dom communications channel. bits 8-15 are dudt,
- * bits, 16-26 are threshold
+ * bits, 16-25 are CAL_THR -- the calibration threshold.
  */
 /*@{*/
 /** register addresss */
@@ -425,6 +436,92 @@ enum DOMPulserRates {
 #define DOM_FPGA_TEST_LOCAL_CLOCK_HIGH (DOM_FPGA_TEST_BASE + 0x1044)
 /*@}*/
 
+/**
+ * \defgroup fpga_test_atwd0_timestamp_low ATWD0 local clock readout (low)
+ * \ingroup fpga_test_regs
+ *
+ * \brief This register contains the low 32 bits of the 48 bit local
+ * clock readout register on the start of a atwd0 readout...
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_ATWD0_TIMESTAMP_LOW (DOM_FPGA_TEST_BASE + 0x1048)
+/*@}*/
+
+/**
+ * \defgroup fpga_test_atwd0_timestamp_high ATWD0 local clock readout (high)
+ * \ingroup fpga_test_regs
+ *
+ * \brief This register contains the high 16 bits of the 48 bit local
+ * clock readout register on the start of a atwd0 readout...
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_ATWD0_TIMESTAMP_HIGH (DOM_FPGA_TEST_BASE + 0x104c)
+/*@}*/
+
+/**
+ * \defgroup fpga_test_atwd1_timestamp_low ATWD1 local clock readout (low)
+ * \ingroup fpga_test_regs
+ *
+ * \brief This register contains the low 32 bits of the 48 bit local
+ * clock readout register on the start of a atwd1 readout...
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_ATWD1_TIMESTAMP_LOW (DOM_FPGA_TEST_BASE + 0x1050)
+/*@}*/
+
+/**
+ * \defgroup fpga_test_atwd1_timestamp_high ATWD1 local clock readout (high)
+ * \ingroup fpga_test_regs
+ *
+ * \brief This register contains the high 16 bits of the 48 bit local
+ * clock readout register on the start of a atwd1 readout...
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_ATWD1_TIMESTAMP_HIGH (DOM_FPGA_TEST_BASE + 0x1054)
+/*@}*/
+
+
+
+/**
+ * \defgroup fpga_test_domid_low low 32 bit of the dom id
+ * \ingroup fpga_test_regs
+ *
+ * \brief This register contains the low 32 bits of the 48 bit domid
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_DOMID_LOW (DOM_FPGA_TEST_BASE + 0x1058)
+/*@}*/
+
+/**
+ * \defgroup fpga_test_domid_high high 16 bits of the dom id
+ * \ingroup fpga_test_regs
+ *
+ * \brief This register contains the low 32 bits of the 48 bit domid,
+ * bit 16 of this register is a flag that must set to 1 to indicate
+ * that the registers are now valid (both fpga_test_domid_high and
+ * fpga_test_domid_low).
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_DOMID_HIGH (DOM_FPGA_TEST_BASE + 0x105c)
+/*@}*/
+
+/**
+ * \defgroup fpga_test_led_atwd_delay Launch delay from on board led to ATWD
+ * \ingroup fpga_test_regs
+ *
+ * \brief Low 4 bits are launch delay from on board led to ATWD.
+ * Delay is (2+LED_ATWD_DELAY)*25ns
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_LED_ATWD_DELAY (DOM_FPGA_TEST_BASE + 0x1060)
+/*@}*/
 
 /**
  * \defgroup fpga_test_rom_data ROM Configuration Data

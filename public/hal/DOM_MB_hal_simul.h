@@ -66,9 +66,9 @@
 /**
  * \file DOM_MB_hal.h
  *
- * $Revision: 1.4 $
- * $Author: mcp $
- * $Date: 2003-05-28 01:09:02 $
+ * $Revision: 1.5 $
+ * $Author: arthur $
+ * $Date: 2003-10-27 18:13:31 $
  *
  * \b Usage:
  * \code
@@ -86,7 +86,7 @@
 
 #include <pthread.h>
 #include "hal/DOM_MB_types.h"
-#include "hal/DOM_MB_pld_simul.h"
+#include "hal/DOM_MB_pld.h"
 #include "hal/DOM_MB_fpga.h"
 #include "hal/DOM_MB_fpga_simul.h"
 

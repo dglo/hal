@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_fpga.h
  *
- * $Revision: 1.22 $
+ * $Revision: 1.28 $
  * $Author: arthur $
- * $Date: 2003-07-14 18:14:45 $
+ * $Date: 2003-09-19 18:23:10 $
  *
  * \b Usage:
  * \code
@@ -48,12 +48,14 @@ hal_FPGA_TEST_readout_done(int trigger_mask);
  * \param nfadc number of fadc words to write
  * \param trigger_mask triggered channels to readout...
  *
+ * \return zero ok, non-zero 100ms timeout...
+ *
  * \see hal_FPGA_TEST_readout
  * \see HAL_FPGA_TEST_TRIGGER_ATWD0
  * \see HAL_FPGA_TEST_TRIGGER_ATWD1
  * \see HAL_FPGA_TEST_TRIGGER_FADC
  */
-void
+int
 hal_FPGA_TEST_readout(short *ch0, short *ch1, short *ch2, short *ch3,
 		      short *ch4, short *ch5, short *ch6, short *ch7,
 		      int max, 
@@ -89,11 +91,19 @@ int
 hal_FPGA_TEST_comm_serial_read(short *buffer, int max);
 
 /** trigger atwd0 */
-#define HAL_FPGA_TEST_TRIGGER_ATWD0 1
+#define HAL_FPGA_TEST_TRIGGER_ATWD0      0x01
 /** trigger atwd1 */
-#define HAL_FPGA_TEST_TRIGGER_ATWD1 2
+#define HAL_FPGA_TEST_TRIGGER_ATWD1      0x02
 /** trigger flash adc */
-#define HAL_FPGA_TEST_TRIGGER_FADC  4
+#define HAL_FPGA_TEST_TRIGGER_FADC       0x04
+/** trigger fe pulser */
+#define HAL_FPGA_TEST_TRIGGER_FE_PULSER  0x08
+/** trigger led pulser */
+#define HAL_FPGA_TEST_TRIGGER_LED_PULSER 0x10
+/** trigger r2r triangle */
+#define HAL_FPGA_TEST_TRIGGER_R2R_TRI    0x20
+/** trigger r2r triangle fe  */
+#define HAL_FPGA_TEST_TRIGGER_R2R_TRI_FE 0x40
 
 /**
  * forced launch of the atwd/fadc...
@@ -291,6 +301,91 @@ hal_FPGA_TEST_get_mpe_rate(void);
 unsigned long long
 hal_FPGA_TEST_get_local_clock(void);
 
+/**
+ * get ATWD0 clock readout on start of ATWD0 launch...
+ *
+ * \returns the local clock readout
+ */
+unsigned long long
+hal_FPGA_TEST_get_atwd0_clock(void);
+
+/**
+ * get ATWD1 clock readout on start of ATWD1 launch...
+ *
+ * \returns the atwd1 clock readout
+ */
+unsigned long long
+hal_FPGA_TEST_get_atwd1_clock(void);
+
+/**
+ * Starts ATWD ping-pong acquisition, using discriminator trigger.
+ *
+ * \see hal_FPGA_TEST_disable_ping_pong
+ * \see hal_FPGA_TEST_readout_ping_pong
+ * \see hal_FPGA_TEST_get_ping_pong_clock
+ * \see hal_FPGA_TEST_readout_ping_pong_done
+ */
+void
+hal_FPGA_TEST_enable_ping_pong(void);
+
+/**
+ * Waits for an ATWD trigger and reads out data from
+ * the appropriate ATWD in ping-pong mode.
+ *
+ * \param ch0 channel 0 buffer to be filled, may be NULL (not filled)
+ * \param ch1 channel 1 buffer to be filled, may be NULL (not filled)
+ * \param ch2 channel 2 buffer to be filled, may be NULL (not filled)
+ * \param ch3 channel 3 buffer to be filled, may be NULL (not filled)
+ * \param max max number of atwd words to write (per channel)
+ * \param ch_mask 4-bit mask indicates which channels to read out
+ *
+ * \see hal_FPGA_TEST_enable_ping_pong
+ * \see hal_FPGA_TEST_disable_ping_pong
+ * \see hal_FPGA_TEST_get_ping_pong_clock
+ * \see hal_FPGA_TEST_readout_ping_pong_done
+ * 
+ */
+void
+hal_FPGA_TEST_readout_ping_pong(short *ch0, short *ch1, short *ch2, short *ch3, int max, short ch_mask);
+
+/**
+ * Gets appropriate ping-pong ATWD clock readout.
+ *
+ * \returns the ping-pong atwd clock readout
+ *
+ * \see hal_FPGA_TEST_enable_ping_pong
+ * \see hal_FPGA_TEST_disable_ping_pong
+ * \see hal_FPGA_TEST_readout_ping_pong
+ * \see hal_FPGA_TEST_readout_ping_pong_done
+ */
+unsigned long long
+hal_FPGA_TEST_get_ping_pong_clock(void);
+
+/**
+ * Indicates to FPGA that both the ATWD buffer and the ATWD clock 
+ * have been read and that ATWD may be re-enabled for ping-ponging.
+ *
+ * \see hal_FPGA_TEST_enable_ping_pong
+ * \see hal_FPGA_TEST_disable_ping_pong
+ * \see hal_FPGA_TEST_readout_ping_pong
+ * \see hal_FPGA_TEST_get_ping_pong_clock
+ */
+void
+hal_FPGA_TEST_readout_ping_pong_done(void);
+
+
+/**
+ * Disables ping-pong mode.
+ *
+ * \see hal_FPGA_TEST_enable_ping_pong
+ * \see hal_FPGA_TEST_readout_ping_pong
+ * \see hal_FPGA_TEST_get_ping_pong_clock
+ * \see hal_FPGA_TEST_readout_ping_pong_done
+ */
+void
+hal_FPGA_TEST_disable_ping_pong(void);
+
+
 /** 
  * enable front end pulser
  *
@@ -325,6 +420,20 @@ hal_FPGA_TEST_request_reboot(void);
  */
 int
 hal_FPGA_TEST_is_reboot_granted(void);
+
+/**
+ * is communications available?
+ *
+ * \returns non-zero if communications is running
+ */
+int
+hal_FPGA_TEST_is_comm_avail(void);
+
+/**
+ * clear any previous atwd/pulser/fadc trigger...
+ */
+void 
+hal_FPGA_TEST_clear_trigger(void);
 
 #endif
 

@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_pld.h
  *
- * $Revision: 1.17 $
+ * $Revision: 1.19 $
  * $Author: arthur $
- * $Date: 2003-07-11 15:02:41 $
+ * $Date: 2003-10-27 18:13:31 $
  *
  * \b Usage:
  * \code
@@ -31,17 +31,60 @@
 BOOLEAN
 halIsSimulationPlatform();
 
-/** 
- * This routine returns the version number of the hal access library being 
- * used.
+/**
+ * This routine returns the version number of the firmware at the time
+ * the hal was compiled.
+ * The version number is incremented by one each time a new feature
+ * is added or the api changes.
  *
  * Errors: No error conditions apply.
  *
  * \return library version number
+ * \see halGetHWVersion
+ * \see halGetBuild
+ * \see halGetHWBuild
  *
  */
 USHORT
-halGetVersion();
+halGetVersion(void);
+
+/** 
+ * This routine returns the version number of the firmware that
+ * was loaded on the DOM hw
+ *
+ * \return firmware's api version number
+ * \see halGetVersion
+ * \see halGetBuild
+ * \see halGetHWBuild
+ */
+USHORT
+halGetHWVersion(void);
+
+/**
+ * This routine returns the build number of the firmware at the time
+ * the hal was compiled.
+ * The build number is incremented by one each time the firmware is
+ * compiled.
+ *
+ * Errors: No error conditions apply.
+ *
+ * \return library version number
+ * \see halGetHWBuild
+ * \see halGetVersion
+ * \see halGetHWVersion
+ *
+ */
+USHORT
+halGetBuild(void);
+
+/** 
+ * This routine returns the build number of the firmware that
+ * was loaded on the DOM.
+ *
+ * \return firmware's api version number
+ */
+USHORT
+halGetHWBuild(void);
 
 /** 
  * This routine indicates whether a console is connected to the serial port 
@@ -192,7 +235,8 @@ halReadBaseADC(void);
  * write values outside the maximum supported by the addressed DAC will 
  * result in maximum permissible value being written to the selected DAC 
  * channel.  Values written to each DAC channel will be stored, on a channel 
- * by channel basis, within the hal library.
+ * by channel basis, within the hal library.  DAC values less than zero
+ * will be assigned zero.
  *
  * Errors: Requests to write a value to an undefined DAC channel will result 
  * in no action taken.  No error indication will be given.
@@ -203,7 +247,7 @@ halReadBaseADC(void);
  * \see DOM_HAL_NUM_DAC_CHANNELS
  */
 void
-halWriteDAC(UBYTE channel, USHORT value);
+halWriteDAC(UBYTE channel, int value);
 
 /**
  * This routine writes a value into the High Voltage Base DAC channel 
@@ -512,11 +556,6 @@ halIsFPGALoaded(void);
  * number of dom adc (slow) channels
  */
 #define DOM_HAL_NUM_ADC_CHANNELS 2
-
-/**
- * current version number of this library...
- */
-#define DOM_HAL_VERSION 1
 
 /**
  * number of atwd mux inputs

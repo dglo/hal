@@ -8,6 +8,8 @@
 
 #include "booter/epxa.h"
 
+#include "dom-cpld/pld-version.h"
+
 static void max5250Write(int chan, int val);
 static void max525Write(int chan, int val);
 static void max534Write(int chan, int val);
@@ -28,7 +30,12 @@ static void writeLTC1451(int val);
 static int readLTC1286(void);
 
 BOOLEAN halIsSimulationPlatform() { return 0; }
-USHORT halGetHalVersion() { return DOM_HAL_VERSION; }
+
+USHORT halGetVersion(void) { return PLD_VERSION_API_NUM; }
+USHORT halGetHWVersion(void) { return PLD(API_LOW)|(PLD(API_HIGH)<<8); }
+USHORT halGetBuild(void) { return PLD_VERSION_BUILD_NUM; }
+USHORT halGetHWBuild(void) { return PLD(BUILD_LOW)|(PLD(BUILD_HIGH)<<8); }
+
 BOOLEAN halIsConsolePresent() { 
 #if defined(CPLD_ADDR)
    return RPLDBIT(UART_STATUS, SERIAL_POWER) != 0;
@@ -72,15 +79,41 @@ USHORT halReadADC(UBYTE channel) {
    return ret;
 }
 
-static USHORT daclookup[DOM_HAL_NUM_DAC_CHANNELS];
+static int daclookup[DOM_HAL_NUM_DAC_CHANNELS];
 
-void halWriteDAC(UBYTE channel, USHORT value) {
+static const int dacMaxValues[] = {
+   /* 0 */ 4095,
+   /* 1 */ 4095,
+   /* 2 */ 4095,
+   /* 3 */ 4095,
+   /* 4 */ 4095,
+   /* 5 */ 4095,
+   /* 6 */ 4095,
+   /* 7 */ 4095,
+   /* 8 */ 1023,
+   /* 9 */ 1023,
+   /* 10 */ 1023,
+   /* 11 */ 1023,
+   /* 12 */ 1023,
+   /* 13 */ 1023,
+   /* 14 */ 1023,
+   /* 15 */ 1023,
+};
+
+static int fixupDACValue(int ch, int value) {
+   if (value<0) return 0;
+   if (value>dacMaxValues[ch]) return dacMaxValues[ch];
+   return value;
+}
+
+
+void halWriteDAC(UBYTE channel, int value) {
    const int cs = channel/4;
    const int dev = channel%4;
 
    if (channel>=DOM_HAL_NUM_DAC_CHANNELS) return;
 
-   daclookup[channel] = value;
+   daclookup[channel] = fixupDACValue(channel, value);
 
    /* now clock it out...
     */
@@ -279,16 +312,12 @@ void halDisableSerialDSR() {
 BOOLEAN halSerialDSRState() { return RPLDBIT(UART_STATUS, SERIAL_DSR); }
 
 void halBoardReboot() {
-   if (halIsFPGALoaded()) {
-      int i;
-
-      /* FIXME: we need to check _which_ fpga is running, not
-       * assume test...
-       */
+   if (halIsFPGALoaded() && hal_FPGA_TEST_is_comm_avail()) {
       hal_FPGA_TEST_request_reboot();
-      
-      for (i=0; i<1000 && !hal_FPGA_TEST_is_reboot_granted(); i++) 
-	 halUSleep(10);
+
+      /* we can't reboot unless we're granted a reboot...
+       */
+      while (!hal_FPGA_TEST_is_reboot_granted()) ;
    }
    
    PLD(REBOOT_CONTROL) = PLDBIT(REBOOT_CONTROL, INITIATE_REBOOT);
@@ -324,7 +353,8 @@ const char *halGetBoardID(void) {
       /* we're initialized... */
       isInit = 1;
    }
-   return id;
+   /* throw away top 4 bytes -- vendor code... */
+   return id + 4;
 }
 
 
@@ -797,8 +827,6 @@ const char *halHVSerial(void) {
    }
 
    for (i=0; i<64; i++) {
-      int j;
-      unsigned chk = 0;
       PLD(ONE_WIRE) = 0xb;
       waitBusy();
       t[i/4]<<=1;
@@ -807,7 +835,7 @@ const char *halHVSerial(void) {
       }
    }
 
-   for (i=0; i<64/4; i++) t[i] = hexdigit[t[i]];
+   for (i=0; i<64/4; i++) t[i] = hexdigit[(int)t[i]];
    
    return t;
 }

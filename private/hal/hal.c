@@ -15,13 +15,16 @@
 
 // storage for DACs and ADCs. used for simulation
 static USHORT DAC[DOM_HAL_NUM_DAC_CHANNELS]={0,0,0,0,0,0,0,0};
-static USHORT ADC[DOM_HAL_NUM_ADC_CHANNELS]={0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0};
+static USHORT ADC[DOM_HAL_NUM_ADC_CHANNELS]; 
+/* ={0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0}; */
 static USHORT PMT_HV=0;
 static BOOLEAN PMT_HV_ENABLE=FALSE;
 
 BOOLEAN halIsSimulationPlatform() { return 1; }
-USHORT halGetHalVersion() { return 1; }
+USHORT halGetVersion() { return 1; }
+USHORT halGetHWVersion() { return 1; }
+USHORT halGetBuild() { return 1; }
+USHORT halGetHWBuild() { return 1; }
 BOOLEAN halIsConsolePresent() { return 0; }
 
 static BOOLEAN flashboot = 0;
@@ -36,7 +39,7 @@ USHORT halReadADC(UBYTE channel) {
     return ADC[channel]; 
 }
 
-void halWriteDAC(UBYTE channel, USHORT value) {
+void halWriteDAC(UBYTE channel, int value) {
    if (channel>=DOM_HAL_NUM_DAC_CHANNELS) return;
    DAC[channel] = value&0xfff;
 }
@@ -99,7 +102,7 @@ void halBoardReboot() {
 }
 
 UBYTE boardID[6]={0,0,0,0,0,0};
-char *halGetBoardID(void) {
+const char *halGetBoardID(void) {
     // make string static to keep it around after returning
     static char ID[13];
     int i;
@@ -412,11 +415,12 @@ hal_FPGA_TEST_readout_done(int mask) {
     return TRUE;
 }
 
-void
+int
 hal_FPGA_TEST_readout(short *ch0_0, short *ch1_0, short *ch2_0, short *ch3_0,
 	short *ch0_1, short *ch1_1, short *ch1_2, short *ch3_1, int atwd_max,
 	short *fadc, int fadc_max,
 	int mask) {
+   return 0;
 }
 
 void 
@@ -461,3 +465,25 @@ int halIsFPGALoaded(void) { return 0; }
 
 void hal_FPGA_TEST_request_reboot(void){}
 int hal_FPGA_TEST_is_reboot_granted(void) { return 1; }
+
+void hal_FPGA_TEST_enable_ping_pong(void) {}
+unsigned long long hal_FPGA_TEST_get_atwd0_clock(void) {return 0ULL; }
+unsigned long long hal_FPGA_TEST_get_atwd1_clock(void) { return 0ULL; }
+void hal_FPGA_TEST_readout_ping_pong(short *ch0, short *ch1, 
+                                     short *ch2, short *ch3,
+                                     int max, short ch_mask) {
+}
+unsigned long long hal_FPGA_TEST_get_ping_pong_clock(void) {
+   return 0ULL;
+}
+
+void hal_FPGA_TEST_readout_ping_pong_done(void) {}
+void hal_FPGA_TEST_disable_ping_pong(void) {
+}
+int
+hal_FPGA_query_versions(DOM_HAL_FPGA_TYPES type, unsigned comps) { 
+   return -1;
+}
+
+
+
