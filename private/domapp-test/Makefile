@@ -2,7 +2,7 @@
 
 KOBJS = ../lib/crt0.o ../lib/libkernel.a
 
-all: ../bin/domapp-test.bin.gz
+all: ../bin/real-app.bin.gz
 
 .c.o:
 	$(CC) -c $(CFLAGS) $<
@@ -20,19 +20,18 @@ all: ../bin/domapp-test.bin.gz
 
 ../bin/%.bin.gz: %.bin; gzip -c $< > $@
 
-../bin/domapp-test.bin.gz: domapp-test.bin
+../bin/real-app.bin.gz: real-app.bin
 
-../bin/domapp-test: real-app.o
+../bin/real-app: real-app.o
 	gcc -Wall -I../Linux-i386/public -L../Linux-i386/lib \
 		-DICESOFT_BUILD=\"$(ICESOFT_BUILD)\" \
-		-o domapp-test real-app.o -lhal
+		-o real-app real-app.c -lhal
 
 clean:
-	rm -f real-app domapp-test *.o
+	rm -f real-app *.o
 
-domapp-test.elf: real-app.o $(KERNELX) $(LIBHAL) $(SYSLIBS) $(KOBJS)
-	$(LD) --script=$(KERNELX) -o domapp-test.elf \
+real-app.elf: real-app.o $(KERNELX) $(LIBHAL) $(SYSLIBS) $(KOBJS)
+	$(LD) --script=$(KERNELX) -o real-app.elf \
 		$(KOBJS) real-app.o \
 			$(LIBHAL) $(SYSLIBS)
-
 

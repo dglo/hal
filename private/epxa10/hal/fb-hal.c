@@ -1,13 +1,11 @@
 /**
  * \file fb-hal.c
  *
- * $Revision: 1.12 $
- * $Author: jacobsen $
- * $Date: 2005-01-22 15:42:23 $
+ * $Revision: 1.8.2.3 $
+ * $Author: arthur $
+ * $Date: 2005-02-04 00:00:12 $
  *
  * The DOM flasher board HAL.
- *
- * Modified 2005-1-22 Jacobsen - support adjustable rate and ATWD launch delay 
  *
  */
 #include <stddef.h>
@@ -19,7 +17,6 @@
 
 #include "hal/DOM_MB_hal.h"
 #include "DOM_FB_regs.h"
-#include "DOM_FPGA_regs.h"
 #include "fb-hal.h"
 
 int getFBclock(void) {
@@ -203,10 +200,6 @@ int hal_FB_get_serial(char **id) {
         memset(id_raw, 0, 8);
         *id = t;
 
-        /* Check for presence bit reset */
-        if (RFBBIT(ONE_WIRE, PRESENT) != 0)
-            return FB_HAL_ERR_ID_NOT_PRESENT;
-
         /* Reset one-wire */
         FB(ONE_WIRE) = 0x0f;
         halUSleep(1000);
@@ -356,21 +349,6 @@ void hal_FB_select_mux_input(UBYTE value) {
 
     FB(LED_MUX_EN) = enable;
     FB(LED_MUX)    = select;
-}
-
-void hal_FB_set_rate(USHORT rate) {
-/* Sets flasher board rate -- minimum 1 Hz, max. 610 Hz */
-#define NRATES 10
-  USHORT table[NRATES] = { 610, 305, 153, 76, 38, 19, 10, 5, 2, 1 };
-  UBYTE ratebits = 0;
-  int it;
-  for(it=NRATES-1;it>0;it--) {
-    if(rate <= table[it]) {
-      ratebits = it; break;
-    }
-  }
-  FPGA(TEST_COMM) = FPGA(TEST_COMM) & ~(0xF<<16);
-  FPGA(TEST_COMM) = FPGA(TEST_COMM) | ((ratebits<<16)&0xF);
 }
 
 /*************************************************************************/
