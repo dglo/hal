@@ -6,6 +6,9 @@
 #include <unistd.h>
 #include <time.h>
 #include <errno.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sys/poll.h>
 
 #include "hal/DOM_MB_hal_simul.h"
 
@@ -52,6 +55,11 @@ USHORT halReadDAC(UBYTE channel) {
 void halEnableBarometer() {;}
 void halDisableBarometer() {;}
 USHORT halReadTemp() { return 100; }
+
+void halPowerUpBase(void) {}
+void halPowerDownBase(void) {}
+void halEnableBaseHV(void) {}
+void halDisableBaseHV(void) {}
 
 void halEnablePMT_HV() { PMT_HV_ENABLE=TRUE; }
 void halDisablePMT_HV() { PMT_HV_ENABLE=FALSE; }
@@ -485,5 +493,38 @@ hal_FPGA_query_versions(DOM_HAL_FPGA_TYPES type, unsigned comps) {
    return -1;
 }
 
+void hal_FPGA_TEST_clear_trigger(void) {
+}
 
+void hal_FPGA_TEST_trigger_LED(int trigger_mask){}
+void hal_FPGA_TEST_enable_LED(void){}
+void hal_FPGA_TEST_disable_LED(void){}
+void hal_FPGA_TEST_set_atwd_LED_delay(int delay){}
 
+int halIsInputData(void) {
+   struct pollfd fds[1];
+   fds[0].fd = 0;
+   fds[0].events = POLLIN;
+   return poll(fds, 1, 0)==1;
+}
+
+unsigned long long halGetBoardIDRaw(void) { return 0ULL; }
+unsigned long long halHVSerialRaw(void) { return 0ULL; }
+void hal_FPGA_TEST_set_scalar_period(DOM_HAL_FPGA_SCALAR_PERIODS ms) {}
+void hal_FPGA_TEST_init_state(void){}
+void hal_FPGA_TEST_set_deadtime(int ns){}
+DOM_HAL_FPGA_TYPES hal_FPGA_query_type(void){ 
+   return DOM_HAL_FPGA_TYPE_INVALID; 
+}
+void hal_FPGA_TEST_start_FB_flashing(void) {}
+void hal_FPGA_TEST_stop_FB_flashing(void) {}
+
+void hal_FB_enable(void) {}
+void hal_FB_disable(void) {}
+const char * hal_FB_get_serial(void) {return "deadbeefdeadbeef";}
+USHORT hal_FB_get_fw_version(void) {return 0;}
+USHORT hal_FB_get_hw_version(void) {return 0;}
+void hal_FB_set_pulse_width(UBYTE value) {}
+void hal_FB_set_brightness(UBYTE value) {}
+void hal_FB_enable_LEDs(USHORT enables) {}
+void hal_FB_select_mux_input(UBYTE value) {}
