@@ -2,6 +2,8 @@
  * \file hal.c, the cpld dom hal.
  */
 #include <stddef.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "hal/DOM_MB_hal.h"
 #include "hal/DOM_PLD_regs.h"
@@ -9,6 +11,8 @@
 #include "booter/epxa.h"
 
 #include "dom-cpld/pld-version.h"
+
+static int  dowCRC(unsigned char buf[], int len);
 
 static void max5250Write(int chan, int val);
 static void max525Write(int chan, int val);
@@ -929,64 +933,68 @@ static void waitBusy(void) { while (RPLDBIT(ONE_WIRE, BUSY)) ; }
 
 /* use halHVSerialRaw (when it's ready)...
  */
+
+/*
+ * 2004-07-14 k. hanson
+ * see my posting to icebug of earlier message by 
+ * nobuyoshi kitamura on 2004-07-09 that deals with
+ * this problem - the Dallas DS2401 has extra info
+ * aside from serial # in the readout image:
+ *   1 Byte | 6 Byte |   1 Byte
+ *  --------+--------+------------
+ *     CRC  |   ID   | FAMILY CODE
+ * so i added support to check CRC validity (retry
+ * 5 times) and to only emit the 6-byte serial ID
+ * as a 12-character hexadecimal string.
+ */
 const char *halHVSerial(void) {
-   int i;
-   const char *hexdigit = "0123456789abcdef";
-   static char t[64/4+1];
-   static int isInit = 0;
-   
-   if (!isInit && hvIsPowered) {
-      PLD(ONE_WIRE) = 0xf;
-      waitBusy();
-      
-      for (i=0; i<8; i++) {
-         PLD(ONE_WIRE) = ( (0x33>>i) & 1 ) ? 0x9 : 0xa;
-         waitBusy();
-      }
-      
-      for (i=0; i<64; i++) {
-         PLD(ONE_WIRE) = 0xb;
-         waitBusy();
-         t[i/4]<<=1;
-         if (RPLDBIT(ONE_WIRE, DATA)) {
-            t[i/4] |= 1;
-         }
-      }
-      
-      for (i=0; i<64/4; i++) t[i] = hexdigit[(int)t[i]];
-      
-      isInit = 1;
+   static char t[13];
+   int shift = 44, i = 0;
+   const unsigned long long id = halHVSerialRaw();
+   while (shift>=0) {
+      const char *digit = "0123456789abcdef";
+      t[i] = digit[(id>>shift)&0xf];
+      shift -= 4;
+      i++;
    }
-   
    return t;
 }
 
 unsigned long long halHVSerialRaw(void) {
-   static unsigned long long id;
+   static unsigned long long hvid = 0L;
    static int isInit = 0;
    
-   if (!isInit) {
-      int i;
+   if (!isInit && hvIsPowered) {
 
-      PLD(ONE_WIRE) = 0xf;
-      waitBusy();
+      int retry = 0;
+      unsigned char id[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
-      for (i=0; i<8; i++) {
-         PLD(ONE_WIRE) = ( (0x33>>i) & 1 ) ? 0x9 : 0xa;
-         waitBusy();
-      }
+      do {
+	 int i;
+	 PLD(ONE_WIRE) = 0xf;
+	 waitBusy();
       
-      id = 0;
-      for (i=0; i<64; i++) {
-         id<<=1;
-         PLD(ONE_WIRE) = 0xb;
-         if (RPLDBIT(ONE_WIRE, DATA)) id |= 1;
-      }
+	 for (i=0; i<8; i++) {
+	    PLD(ONE_WIRE) = ( (0x33>>i) & 1 ) ? 0x9 : 0xa;
+	    waitBusy();
+	 }
       
-      isInit = 1;
+	 for (i=0; i<64; i++) {
+	    PLD(ONE_WIRE) = 0xb;
+	    waitBusy();
+	    id[i/8] >>= 1;
+	    if (RPLDBIT(ONE_WIRE, DATA)) {
+	       id[i/8] |= 0x80;
+	    }
+	 }
+      } while (dowCRC(id, 8) && retry++ < 5);
+      if (retry < 5) {
+	 memcpy(&hvid, id+1, 6);
+	 isInit = 1;
+      }
    }
    
-   return id;
+   return hvid;
 }
 
 int halIsFPGALoaded(void) { return RPLDBIT(MISC, FPGA_LOADED)==0; }
@@ -1154,3 +1162,53 @@ int halIsInputData(void) {
    return hal_FPGA_TEST_msg_ready();
 }
 
+/*
+ * Compute the Dallas 1-Wire CRC of a stream of bytes.
+ * Returns 0 on success, 1 on error.
+ */
+static int dowCRC(unsigned char s[], int length) {
+    /*
+     * This table taken from page 131 of
+     * The DS19XX Book of iButton Standards
+     *     http://www.ibutton.com/ibuttons/standard.pdf
+     */
+    static unsigned char crctab[256] = { 
+	0, 94, 188, 226, 97, 63, 221, 131, 
+	194, 156, 126, 32, 163, 253, 31, 65,
+	157, 195, 33, 127, 252, 162, 64, 30,
+	95, 1, 227, 189, 62, 96, 130, 220,
+	35, 125, 159, 193, 66, 28, 254, 160, 
+	225,191, 93,3, 128, 222, 60, 98,
+	190, 224, 2, 92, 223, 129, 99, 61, 
+	124, 34, 192,158, 29, 67, 161, 255,
+	70, 24, 250, 164, 39, 121, 155, 197, 
+	132, 218, 56, 102, 229, 187, 89, 7,
+	219, 133, 103, 57, 186, 228, 6, 88, 
+	25, 71, 165, 251, 120, 38, 196, 154,
+	101, 59, 217, 135, 4, 90, 184, 230, 
+	167, 249, 27, 69, 198, 152, 122, 36,
+	248, 166, 68, 26, 153, 199, 37, 123, 
+	58, 100, 134, 216, 91, 5, 231, 185,
+	140, 210, 48, 110, 237, 179, 81, 15, 
+	78, 16, 242, 172, 47, 113, 147, 205,
+	17, 79, 173, 243, 112, 46, 204, 146, 
+	211, 141, 111, 49, 178, 236, 14, 80,
+	175, 241, 19, 77, 206, 144, 114, 44, 
+	109, 51, 209, 143, 12, 82, 176, 238,
+	50, 108, 142, 208, 83, 13, 239, 177, 
+	240, 174, 76, 18, 145, 207, 45, 115,
+	202, 148, 118, 40, 171, 245, 23, 73, 
+	8, 86, 180, 234, 105, 55, 213, 139,
+	87, 9, 235, 181, 54, 104, 138, 212, 
+	149, 203, 41, 119, 244, 170, 72, 22,
+	233, 183, 85, 11, 136, 214, 52, 106, 
+	43, 117, 151, 201, 74, 20, 246, 168,
+	116, 42, 200, 150, 21, 75, 169, 247, 
+	182, 232, 10, 84, 215, 137, 107, 53
+    };
+    int i;
+    int crc = 0;
+    for (i = 0; i < length; i++) 
+	crc = crctab[crc ^ s[i]];
+    return (crc != 0);
+}
