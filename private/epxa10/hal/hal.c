@@ -142,7 +142,30 @@ void halWriteDAC(UBYTE channel, int value) {
       max534Write(dev, value);
    }
 
-   
+   /* sleep until DAC has settled... */
+   if (channel==DOM_HAL_DAC_MULTIPLE_SPE_THRESH ||
+       channel==DOM_HAL_DAC_SINGLE_SPE_THRESH) {
+      halUSleep(1200 * 5);
+   }
+   else if (channel==DOM_HAL_DAC_FAST_ADC_REF) {
+      halUSleep(5000 * 5);
+   }
+   else if (channel==DOM_HAL_DAC_FL_REF) {
+      halUSleep(500 * 5);
+   }
+   else if (channel==DOM_HAL_DAC_MUX_BIAS) {
+      halUSleep(1000 * 5);
+   }
+   else if (channel==DOM_HAL_DAC_ATWD_ANALOG_REF) {
+      halUSleep(1250 * 5);
+   }
+   else if (channel==DOM_HAL_DAC_PMT_FE_PEDESTAL) {
+      halUSleep(6250 * 2);
+   }
+   else {
+      halUSleep(1);
+   }
+
    PLD(SPI_CHIP_SELECT0) = ~0;
 }
 
@@ -247,6 +270,8 @@ void halDisableBarometer(void) {
       PLD(SYSTEM_CONTROL) & (~PLDBIT(SYSTEM_CONTROL, BAROMETER_ENABLE));
 }
 
+static int hvIsPowered = 0;
+
 void halPowerUpBase(void) {
    /* ltc1257 requires cs0 to be low on power up...
     */
@@ -269,6 +294,8 @@ void halPowerUpBase(void) {
    /* chip selects are normally high...
     */
    PLD(SPI_CHIP_SELECT1) = PLDBIT2(SPI_CHIP_SELECT1, BASE_CS0, BASE_CS1); 
+
+   hvIsPowered = 1;
 }
 
 void halPowerDownBase(void) {
@@ -278,6 +305,8 @@ void halPowerDownBase(void) {
    /* drop power */
    PLD(SYSTEM_CONTROL) = 
       PLD(SYSTEM_CONTROL) & (~PLDBIT(SYSTEM_CONTROL, HV_PS_ENABLE));
+
+   hvIsPowered = 0;
 }
 
 void halEnableFlasher(void) {
@@ -288,6 +317,16 @@ void halEnableFlasher(void) {
 void halDisableFlasher(void) {
    PLD(SYSTEM_CONTROL) = 
       PLD(SYSTEM_CONTROL) & (~PLDBIT(SYSTEM_CONTROL, FLASHER_ENABLE));
+}
+
+void halEnableFlasherJTAG(void) {
+   PLD(SYSTEM_CONTROL) = 
+      PLD(SYSTEM_CONTROL) | PLDBIT(SYSTEM_CONTROL, FLASHER_JTAGEN);
+}
+
+void halDisableFlasherJTAG(void) {
+   PLD(SYSTEM_CONTROL) = 
+      PLD(SYSTEM_CONTROL) & (~PLDBIT(SYSTEM_CONTROL, FLASHER_JTAGEN));
 }
 
 BOOLEAN halFlasherState() {
@@ -896,7 +935,7 @@ const char *halHVSerial(void) {
    static char t[64/4+1];
    static int isInit = 0;
    
-   if (!isInit) {
+   if (!isInit && hvIsPowered) {
       PLD(ONE_WIRE) = 0xf;
       waitBusy();
       

@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_pld.h
  *
- * $Revision: 1.28.2.1 $
+ * $Revision: 1.32 $
  * $Author: arthur $
- * $Date: 2004-05-21 17:03:05 $
+ * $Date: 2004-05-18 21:36:29 $
  *
  * \b Usage:
  * \code
@@ -236,7 +236,10 @@ halReadBaseADC(void);
  * result in maximum permissible value being written to the selected DAC 
  * channel.  Values written to each DAC channel will be stored, on a channel 
  * by channel basis, within the hal library.  DAC values less than zero
- * will be assigned zero.
+ * will be assigned zero.  Also, we wait a DAC specific amount of time for
+ * the analog side of the DAC to settle, depending on the time constant
+ * of the circuit it drives (this time is typically 1us but can be as high
+ * as 25ms)
  *
  * Errors: Requests to write a value to an undefined DAC channel will result 
  * in no action taken.  No error indication will be given.
@@ -459,6 +462,24 @@ halDisableFlasher();
  */
 BOOLEAN
 halFlasherState();
+
+/**
+ * Enable flasher board JTAG programming.  Must also
+ * enable FPGA control of flasher board JTAG ports.
+ *
+ * \see halDisableFlasherJTAG
+ */
+void
+halEnableFlasherJTAG();
+
+/**
+ * Disable flasher board JTAG programming.  Must also
+ * disable FPGA control of flasher board JTAG ports.
+ *
+ * \see halEnableFlasherJTAG
+ */
+void
+halDisableFlasherJTAG();
 
 /**
  * power up LED power supply

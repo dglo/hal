@@ -425,6 +425,48 @@ void hal_FPGA_TEST_stop_FB_flashing(void) {
     FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, FL_TRIGGER);
 }
 
+void hal_FPGA_TEST_FB_JTAG_enable(void) {
+    FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, FL_EN_JTAG);
+}
+
+void hal_FPGA_TEST_FB_JTAG_disable(void) {
+    FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, FL_EN_JTAG);
+}
+
+void hal_FPGA_TEST_FB_JTAG_set_TCK(unsigned char val) {
+    if (val & 0x1) {
+        FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, FL_TCK);
+    }
+    else {
+        FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, FL_TCK);
+    }
+}
+
+void hal_FPGA_TEST_FB_JTAG_set_TMS(unsigned char val) {
+    if (val & 0x1) {
+        FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, FL_TMS);
+    }
+    else {
+        FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, FL_TMS);
+    }
+}
+
+void hal_FPGA_TEST_FB_JTAG_set_TDI(unsigned char val) {
+    if (val & 0x1) {
+        FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, FL_TDI);
+    }
+    else {
+        FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, FL_TDI);
+    }
+}
+
+unsigned char hal_FPGA_TEST_FB_JTAG_get_TDO(void) {
+    if (FPGA(TEST_MISC_RESPONSE) & FPGABIT(TEST_MISC_RESPONSE, FL_TDO))
+        return 0x1;
+    else
+        return 0x0;
+}
+
 void hal_FPGA_TEST_clear_trigger(void) {
    clearLaunch();
 }
