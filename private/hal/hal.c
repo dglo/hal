@@ -517,6 +517,8 @@ int halIsInputData(void) {
 
 unsigned long long halGetBoardIDRaw(void) { return 0ULL; }
 unsigned long long halHVSerialRaw(void) { return 0ULL; }
+int halCheckCRC(unsigned char s[], int length) {return 0;}
+
 void hal_FPGA_TEST_set_scalar_period(DOM_HAL_FPGA_SCALAR_PERIODS ms) {}
 void hal_FPGA_TEST_init_state(void){}
 void hal_FPGA_TEST_set_deadtime(int ns){}
@@ -528,10 +530,20 @@ int hal_FPGA_query_build(void){
 }
 void hal_FPGA_TEST_start_FB_flashing(void) {}
 void hal_FPGA_TEST_stop_FB_flashing(void) {}
+void hal_FPGA_TEST_FB_set_aux_reset(void) {}
+void hal_FPGA_TEST_FB_clear_aux_reset(void) {}
+int hal_FPGA_TEST_FB_get_attn(void) {return 0;}
 
-void hal_FB_enable(void) {}
+int hal_FB_enable(int *config_time, int *valid_time) {return 0;}
+void hal_FB_enable_min(void) {}
 void hal_FB_disable(void) {}
-const char * hal_FB_get_serial(void) {return "deadbeefdeadbeef";}
+int hal_FB_get_serial(char **id) {
+    strcpy(*id, "deadbeefdeadbeef");
+    return 0;
+}
+void hal_FB_set_DCDCen(int val) {}
+int hal_FB_get_DCDCen(void) {return 0;}
+int hal_FB_isEnabled(void) {return 0;}
 USHORT hal_FB_get_fw_version(void) {return 0;}
 USHORT hal_FB_get_hw_version(void) {return 0;}
 void hal_FB_set_pulse_width(UBYTE value) {}
