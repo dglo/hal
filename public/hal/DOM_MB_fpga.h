@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_fpga.h
  *
- * $Revision: 1.1.1.15 $
+ * $Revision: 1.28 $
  * $Author: arthur $
- * $Date: 2006-07-21 19:36:31 $
+ * $Date: 2003-09-19 18:23:10 $
  *
  * \b Usage:
  * \code
@@ -17,11 +17,6 @@
  *
  */
 #include "hal/DOM_MB_types.h"
-
-/**
- * fpga clock ticks per second
- */
-#define FPGA_HAL_TICKS_PER_SEC 40000000
 
 /**
  * check to see if triggered readout is done.
@@ -72,12 +67,6 @@ hal_FPGA_TEST_readout(short *ch0, short *ch1, short *ch2, short *ch3,
  */
 void
 hal_FPGA_TEST_comm_dac_write(void);
-
-/**
- * bit bang comm dac
- */
-void
-hal_FPGA_TEST_comm_bit_bang_dac(int v);
 
 /**
  * read a buffer from the communication ADC
@@ -141,31 +130,6 @@ void
 hal_FPGA_TEST_trigger_disc(int trigger_mask);
 
 /**
- * discriminator launch of the atwd/fadc...
- * when LC is enabled
- * \param trigger_mask bitmask of devices to trigger
- *
- * \see HAL_FPGA_TEST_TRIGGER_ATWD0
- * \see HAL_FPGA_TEST_TRIGGER_ATWD1
- * \see HAL_FPGA_TEST_TRIGGER_FADC
- */
-void
-hal_FPGA_TEST_trigger_disc_lc(int trigger_mask);
-
-/** 
- * LED launch of the atwd/fadc...
- *
- * \param trigger_mask bitmask of devices to trigger
- *
- * \see HAL_FPGA_TEST_TRIGGER_ATWD0
- * \see HAL_FPGA_TEST_TRIGGER_ATWD1
- * \see HAL_FPGA_TEST_TRIGGER_LED_PULSER
- * \see HAL_FPGA_TEST_TRIGGER_FADC
- */
-void
-hal_FPGA_TEST_trigger_LED(int trigger_mask);
-
-/**
  * send a message over twisted pair communications channel
  *
  * \param type message type
@@ -173,12 +137,7 @@ hal_FPGA_TEST_trigger_LED(int trigger_mask);
  * \param msg is the message to send
  */
 int
-hal_FPGA_send(int type, int len, const char *msg);
-
-/**
- * for backwards compatibility...
- */
-#define hal_FPGA_TEST_send(a, b, c) hal_FPGA_send(a, b, c)
+hal_FPGA_TEST_send(int type, int len, const char *msg);
 
 /**
  * is there a message waiting to be read in the fifo?
@@ -186,12 +145,7 @@ hal_FPGA_send(int type, int len, const char *msg);
  * \return non-zero if message is waiting in fifo.
  */
 int
-hal_FPGA_msg_ready(void);
-
-/**
- * for backwards compatibility...
- */
-#define hal_FPGA_TEST_msg_ready() hal_FPGA_msg_ready()
+hal_FPGA_TEST_msg_ready(void);
 
 /**
  * receive a message over twister pair communications channel
@@ -201,34 +155,14 @@ hal_FPGA_msg_ready(void);
  * \param msg preallocated buffer at least 4096 bytes long.
  */
 int
-hal_FPGA_receive(int *type, int *len, char *msg);
+hal_FPGA_TEST_receive(int *type, int *len, char *msg);
 
 /**
- * for backwards compatibility...
+ * read DOM MB clock and return value
+ * 
+ * \return long long value of clock
  */
-#define hal_FPGA_TEST_receive(a, b, c) hal_FPGA_receive(a, b, c)
-
-/**
- * set communications parameters
- *
- * \param minclev minimum level for signal leveling
- * \param maxclev maximum level for signal leveling
- * \param thresh threshold for edge detection
- * \param rdelay receiver delay
- * \param sdelay send delay
- */
-void
-hal_FPGA_set_comm_params(int thresh, int dacmax,
-                         int rdelay, int sdelay,
-                         int minclev, int maxclev);
-
-/**
- * set maximum level for auto communications signal leveling
- *
- * \param maxclev ADC counts
- */
-int hal_FPGA_set_maxclev(int maxclev);
-
+long long hal_FPGA_getClock();
 
 /** 
  * fpga types.
@@ -236,11 +170,8 @@ int hal_FPGA_set_maxclev(int maxclev);
  * \see hal_FPGA_query_versions
  */
 typedef enum {
-   /** Invalid fpga type */
-   DOM_HAL_FPGA_TYPE_INVALID,
-
    /** Config boot fpga */
-   DOM_HAL_FPGA_TYPE_CONFIGBOOT,
+   DOM_HAL_FPGA_TYPE_CONFIG,
 
    /** Iceboot fpga */
    DOM_HAL_FPGA_TYPE_ICEBOOT,
@@ -252,7 +183,7 @@ typedef enum {
    DOM_HAL_FPGA_TYPE_STF_COM,
 
    /** Application fpga */
-   DOM_HAL_FPGA_TYPE_DOMAPP
+   DOM_HAL_FPGA_DOMAPP
 } DOM_HAL_FPGA_TYPES;
 
 /** 
@@ -294,36 +225,6 @@ typedef enum {
 } DOM_HAL_FPGA_COMPONENTS;
 
 /**
- * query fpga component version number.
- *
- * \param cmp fpga component specifier, \see DOM_HAL_FPGA_COMPONENTS
- * \return build number or -1 on error
- */
-int 
-hal_FPGA_query_component_version(DOM_HAL_FPGA_COMPONENTS cmp);
-
-/**
- * query fpga expected component version number.
- *
- * \param type fpga type, \see DOM_HAL_FPGA_TYPES
- * \param cmp fpga component specifier, \see DOM_HAL_FPGA_COMPONENTS
- * \return expected build number or -1 on error
- */
-int 
-hal_FPGA_query_component_expected(DOM_HAL_FPGA_TYPES type,
-                                  DOM_HAL_FPGA_COMPONENTS cmp);
-
-/**
- * query fpga dom communications version
- */
-int hal_FPGA_dom_comm_version(void);
-
-/**
- * return compiled in dom communications version
- */
-int hal_FPGA_dom_comm_expected_version(void);
-
-/**
  * check fpga version numbers.
  *
  * \param type fpga type (test, app, ...)
@@ -343,14 +244,6 @@ hal_FPGA_query_versions(DOM_HAL_FPGA_TYPES type, unsigned comps_mask);
  */
 int
 hal_FPGA_query_build(void);
-
-/**
- * get fpga type.
- *
- * \return fpga type
- */
-DOM_HAL_FPGA_TYPES 
-hal_FPGA_query_type(void);
 
 /** 
  * fpga valid pulser rates...
@@ -511,209 +404,13 @@ hal_FPGA_TEST_enable_pulser(void);
 void 
 hal_FPGA_TEST_disable_pulser(void);
 
-/** 
- * Enable on-board LED pulser
- *
- * \see hal_FPGA_TEST_disable_LED
- * \see hal_FPGA_TEST_trigger_LED
- * \see hal_FPGA_TEST_set_atwd_LED_delay
- */
-void 
-hal_FPGA_TEST_enable_LED(void);
-
-/** 
- * Disable on-board LED pulser
- *
- * \see hal_FPGA_TEST_enable_LED
- * \see hal_FPGA_TEST_trigger_LED
- * \see hal_FPGA_TEST_set_atwd_LED_delay
- */
-void 
-hal_FPGA_TEST_disable_LED(void);
-
-/**
- * Set the ATWD launch delay from the LED pulse
- *
- * \param delay ATWD launch from LED pulse = (2+delay)*25ns
- *
- * \see hal_FPGA_TEST_enable_LED
- * \see hal_FPGA_TEST_disable_LED
- * \see hal_FPGA_TEST_start_FB_flashing
- * \see hal_FPGA_TEST_stop_FB_flashing
- * \see hal_FPGA_TEST_trigger_LED
- */
-void 
-hal_FPGA_TEST_set_atwd_LED_delay(int delay);
-
-/**
- * Routine that starts the flasher board flashing.
- * 
- * \see hal_FPGA_TEST_stop_FB_flashing
- * \see hal_FPGA_TEST_trigger_LED
- * \see hal_FPGA_TEST_set_atwd_LED_delay
- *
- */
-void
-hal_FPGA_TEST_start_FB_flashing(void);
-
-/**
- * Routine that stops the flasher board flashing.
- * 
- * \see hal_FPGA_TEST_start_FB_flashing
- *
- */
-void
-hal_FPGA_TEST_stop_FB_flashing(void);
-
-/**
- * Routine that sets the flasher board rate.
- * 
- * \param Rate in Hz
- */
-void
-hal_FPGA_TEST_FB_set_rate(USHORT rate);
-
-/**
- * Auxiliary reset control for the flasher board.
- * Sets the auxiliary reset bit -- used during the
- * FB CPLD acknowledge sequence.
- * 
- * \see hal_FPGA_TEST_FB_clear_aux_reset
- * \see hal_FPGA_TEST_FB_get_attn
- *
- */
-void 
-hal_FPGA_TEST_FB_set_aux_reset(void);
-
-/**
- * Auxiliary reset control for the flasher board.
- * Clears the auxiliary reset bit -- used during
- * FB CPLD acknowledge power-up sequence.
- * 
- * \see hal_FPGA_TEST_FB_set_aux_reset
- * \see hal_FPGA_TEST_FB_get_attn
- *
- */
-void 
-hal_FPGA_TEST_FB_clear_aux_reset(void);
-
-/**
- * Reads the flasher board ATTN bit.  Used during
- * FB CPLD acknowledge power-up sequence.
- * 
- * \see hal_FPGA_TEST_FB_set_aux_reset
- * \see hal_FPGA_TEST_FB_clear_aux_reset
- *
- * \returns value of ATTN bit (0/1)
- */
-int 
-hal_FPGA_TEST_FB_get_attn(void);
-
-/**
- * Routine that enables FB JTAG port control.  Must
- * also enable on flasherboard side via PLD.
- *
- * \see hal_FPGA_TEST_FB_JTAG_disable
- * \see hal_FPGA_TEST_FB_JTAG_set_TCK
- * \see hal_FPGA_TEST_FB_JTAG_set_TMS
- * \see hal_FPGA_TEST_FB_JTAG_set_TDI
- * \see hal_FPGA_TEST_FB_JTAG_get_TOD
- *
- */
-void
-hal_FPGA_TEST_FB_JTAG_enable(void);
-
-/**
- * Routine that disables FB JTAG port control.  Must
- * also disable on flasherboard side via PLD.
- *
- * \see hal_FPGA_TEST_FB_JTAG_enable
- * \see hal_FPGA_TEST_FB_JTAG_set_TCK
- * \see hal_FPGA_TEST_FB_JTAG_set_TMS
- * \see hal_FPGA_TEST_FB_JTAG_set_TDI
- * \see hal_FPGA_TEST_FB_JTAG_get_TDO
- *
- */
-void
-hal_FPGA_TEST_FB_JTAG_disable(void);
-
-
-/**
- * Routine that sets the flasherboard JTAG
- * TCK port.
- *
- * \see hal_FPGA_TEST_FB_JTAG_enable
- * \see hal_FPGA_TEST_FB_JTAG_disable
- * \see hal_FPGA_TEST_FB_JTAG_set_TMS
- * \see hal_FPGA_TEST_FB_JTAG_set_TDI
- * \see hal_FPGA_TEST_FB_JTAG_get_TDO
- * 
- * \param val value to write (0/1)
- *
- */
-void
-hal_FPGA_TEST_FB_JTAG_set_TCK(unsigned char val);
-
-/**
- * Routine that sets the flasherboard JTAG
- * TMS port.
- *
- * \see hal_FPGA_TEST_FB_JTAG_enable
- * \see hal_FPGA_TEST_FB_JTAG_disable
- * \see hal_FPGA_TEST_FB_JTAG_set_TCK
- * \see hal_FPGA_TEST_FB_JTAG_set_TDI
- * \see hal_FPGA_TEST_FB_JTAG_get_TDO
- * 
- * \param val value to write (0/1)
- *
- */
-void
-hal_FPGA_TEST_FB_JTAG_set_TMS(unsigned char val);
-
-/**
- * Routine that sets the flasherboard JTAG
- * TDI port.
- *
- * \see hal_FPGA_TEST_FB_JTAG_enable
- * \see hal_FPGA_TEST_FB_JTAG_disable
- * \see hal_FPGA_TEST_FB_JTAG_set_TCK
- * \see hal_FPGA_TEST_FB_JTAG_set_TMS
- * \see hal_FPGA_TEST_FB_JTAG_get_TDO
- * 
- * \param val value to write (0/1)
- *
- */
-void
-hal_FPGA_TEST_FB_JTAG_set_TDI(unsigned char val);
-
-/**
- * Routine that reads the flasherboard JTAG
- * TDO port.
- *
- * \see hal_FPGA_TEST_FB_JTAG_enable
- * \see hal_FPGA_TEST_FB_JTAG_disable
- * \see hal_FPGA_TEST_FB_JTAG_set_TCK
- * \see hal_FPGA_TEST_FB_JTAG_set_TMS
- * \see hal_FPGA_TEST_FB_JTAG_set_TDI
- *
- * \returns value of TDO (0/1)
- *
- */
-unsigned char
-hal_FPGA_TEST_FB_JTAG_get_TDO(void);
-
 /**
  * request reboot
  *
  * \see hal_FPGA_TEST_is_reboot_granted
  */
 void
-hal_FPGA_request_reboot(void);
-
-/**
- * for backwards compatibility...
- */
-#define hal_FPGA_TEST_request_reboot() hal_FPGA_request_reboot()
+hal_FPGA_TEST_request_reboot(void);
 
 /**
  * request reboot
@@ -722,12 +419,7 @@ hal_FPGA_request_reboot(void);
  * \see hal_FPGA_TEST_request_reboot
  */
 int
-hal_FPGA_is_reboot_granted(void);
-
-/**
- * for backwards compatibility...
- */
-#define hal_FPGA_TEST_is_reboot_granted() hal_FPGA_is_reboot_granted()
+hal_FPGA_TEST_is_reboot_granted(void);
 
 /**
  * is communications available?
@@ -735,12 +427,7 @@ hal_FPGA_is_reboot_granted(void);
  * \returns non-zero if communications is running
  */
 int
-hal_FPGA_is_comm_avail(void);
-
-/**
- * for backwards compatibility...
- */
-#define hal_FPGA_TEST_is_comm_avail() hal_FPGA_is_comm_avail()
+hal_FPGA_TEST_is_comm_avail(void);
 
 /**
  * clear any previous atwd/pulser/fadc trigger...
@@ -748,108 +435,15 @@ hal_FPGA_is_comm_avail(void);
 void 
 hal_FPGA_TEST_clear_trigger(void);
 
-/**
- * initialize the fpga, can be used to put the fpga in a known state.
- * yes, i understand there are known knowns, known unknowns and 
- * unknown unknowns.  this is probably a known unknown (if i had
- * to commit).  This is not required to get the fpga to work, it is
- * just a convenience function to try to get it in a known state.
- */
-void
-hal_FPGA_TEST_init_state(void);
-
-/** 
- * fpga scalar period types.
- *
- * \see hal_FPGA_TEST_set_scalar_period
- */
-typedef enum {
-   /** 10ms scalar sample period */
-   DOM_HAL_FPGA_SCALAR_10MS,
-
-   /** 100ms scalar sample period */
-   DOM_HAL_FPGA_SCALAR_100MS
-} DOM_HAL_FPGA_SCALAR_PERIODS;
-
-/**
- * set the scalar period
- *
- * \see DOM_HAL_FPGA_SCALAR_PERIODS
- */
-void hal_FPGA_TEST_set_scalar_period(DOM_HAL_FPGA_SCALAR_PERIODS );
-
-/**
- * set the atwd deadtime launch delay
- *
- * \param ns nanoseconds of delay (50, 100, 200, 400, ...)
- *
- * \see DOM_HAL_FPGA_SCALAR_PERIODS
- */
-void hal_FPGA_TEST_set_deadtime(int ns);
-
-/**
- * query whether ATWD0 trigger was concident with a local coin.
- * signal
- * \return 1 if ATWD0 was coincident w/ upper or lower neighbor
- */
-int hal_FPGA_TEST_atwd0_has_lc(void);
-
-/**
- * query whether ATWD1 trigger was concident with a local coin.
- * signal
- * \return 1 if ATWD1 was coincident w/ upper or lower neighbor
- */
-int hal_FPGA_TEST_atwd1_has_lc(void);
-
-/**
- * Set local coin. launch window times.  Arguments are rounded
- * DOWN to nearest 50nsec clock cycle.
- * \param up_pre_ns up pre ATWD launch window (nsec)
- * \param up_post_ns up post ATWD launch window (nsec)
- * \param dn_pre_ns down pre ATWD launch window (nsec)
- * \param dn_post_ns down post ATWD launch window (nsec)
- * \return 1 if any argument out of bounds (<0 or >3150),
- *           else 0
- */
-int hal_FPGA_TEST_set_lc_launch_window(int up_pre_ns,
-				       int up_post_ns,
-				       int down_pre_ns,
-				       int down_post_ns);
-
-typedef enum {
-  DOM_HAL_LC_LOGIC_OR,
-  DOM_HAL_LC_LOGIC_AND
-} DOM_HAL_LC_LOGIC_T;
-
-/**
- * Enable transmission of LC pulses when SPE disc. fires
- */
-void hal_FPGA_TEST_enable_spe_lc(int ena_lo, int ena_hi,
-                                DOM_HAL_LC_LOGIC_T logic_mode);
-
-/**
- * Disable transmission of LC pulses when SPE disc. fires
- */
-void hal_FPGA_TEST_disable_spe_lc(void);
-
-/** 
- * Query whether SPE->LC enable is set
- */
-int hal_FPGA_TEST_spe_lc_enabled(int * ena_lo, int * ena_hi);
-
-/**
- * Use an FPGA FF to synchronize LC signals
- *
- * \see hal_FPGA_TEST_lc_sync_comparator
- */
-void hal_FPGA_TEST_lc_sync_ff(void);
-
-/**
- * Use comparator latches to synchronize LC signals
- *
- * \see hal_FPGA_TEST_lc_sync_ff
- */
-void hal_FPGA_TEST_lc_sync_comparator(void);
-
 #endif
+
+
+
+
+
+
+
+
+
+
 

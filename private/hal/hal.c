@@ -6,9 +6,6 @@
 #include <unistd.h>
 #include <time.h>
 #include <errno.h>
-#include <string.h>
-#include <stdlib.h>
-#include <sys/poll.h>
 
 #include "hal/DOM_MB_hal_simul.h"
 
@@ -54,16 +51,7 @@ USHORT halReadDAC(UBYTE channel) {
 
 void halEnableBarometer() {;}
 void halDisableBarometer() {;}
-void halStartReadTemp() { }
-int halReadTempDone(void) { return 1; }
-
-USHORT halFinishReadTemp() { return 100; }
 USHORT halReadTemp() { return 100; }
-
-void halPowerUpBase(void) {}
-void halPowerDownBase(void) {}
-void halEnableBaseHV(void) {}
-void halDisableBaseHV(void) {}
 
 void halEnablePMT_HV() { PMT_HV_ENABLE=TRUE; }
 void halDisablePMT_HV() { PMT_HV_ENABLE=FALSE; }
@@ -80,7 +68,6 @@ void halWriteBaseDAC(USHORT value) {PMT_HV = value;}
 static UBYTE muxlookup;
 
 void halSelectAnalogMuxInput(UBYTE channel) { muxlookup = channel; }
-void halDisableAnalogMux(void) { }
 
 static BOOLEAN swapflash = 0;
 
@@ -202,20 +189,6 @@ void halUSleep(int us) {
    }
    
    /* usleep(us); */
-}
-
-void halNanoSleep(unsigned ns) {
-   struct timespec ts, rm;
-
-   ts.tv_sec = ns/1000000000;
-   ts.tv_nsec = ns%1000000000;
-
-   while (1) {
-      if (nanosleep(&ts, &rm)<0 && errno==EINTR) {
-	 ts = rm;
-      }
-      else return;
-   }
 }
 
 UBYTE *bufferBaseAddr;
@@ -421,17 +394,14 @@ halSimulIncReadoutIndex(void) {
 }
 
 int
-hal_FPGA_send(int type, int len, const char *msg) {
-   return write(1, msg, len);
+hal_FPGA_TEST_send(int type, int len, const char *msg) {
+    return 1;
 }
 
 int
-hal_FPGA_receive(int *type, int *len, char *msg) {
-   *len = read(0, msg, 4092);
-    return 0;
+hal_FPGA_TEST_receive(int *type, int *len, char *msg) {
+    return 1;
 }
-
-
 
 long long hal_FPGA_getClock() {
     return (long long)time(NULL);
@@ -493,8 +463,8 @@ hal_FPGA_TEST_get_local_clock(void) { return 123456;}
 
 int halIsFPGALoaded(void) { return 0; }
 
-void hal_FPGA_request_reboot(void){}
-int hal_FPGA_is_reboot_granted(void) { return 1; }
+void hal_FPGA_TEST_request_reboot(void){}
+int hal_FPGA_TEST_is_reboot_granted(void) { return 1; }
 
 void hal_FPGA_TEST_enable_ping_pong(void) {}
 unsigned long long hal_FPGA_TEST_get_atwd0_clock(void) {return 0ULL; }
@@ -515,75 +485,5 @@ hal_FPGA_query_versions(DOM_HAL_FPGA_TYPES type, unsigned comps) {
    return -1;
 }
 
-void hal_FPGA_TEST_clear_trigger(void) {
-}
-
-void hal_FPGA_TEST_trigger_LED(int trigger_mask){}
-void hal_FPGA_TEST_enable_LED(void){}
-void hal_FPGA_TEST_disable_LED(void){}
-void hal_FPGA_TEST_set_atwd_LED_delay(int delay){}
-
-int halIsInputData(void) {
-   struct pollfd fds[1];
-   fds[0].fd = 0;
-   fds[0].events = POLLIN;
-   return poll(fds, 1, 0)==1;
-}
-
-unsigned long long halGetBoardIDRaw(void) { return 0ULL; }
-unsigned long long halHVSerialRaw(void) { return 0ULL; }
-void hal_FPGA_TEST_set_scalar_period(DOM_HAL_FPGA_SCALAR_PERIODS ms) {}
-void hal_FPGA_TEST_init_state(void){}
-void hal_FPGA_TEST_set_deadtime(int ns){}
-DOM_HAL_FPGA_TYPES hal_FPGA_query_type(void){ 
-   return DOM_HAL_FPGA_TYPE_INVALID; 
-}
-int hal_FPGA_query_build(void){ 
-   return 0;
-}
-void hal_FPGA_TEST_start_FB_flashing(void) {}
-void hal_FPGA_TEST_stop_FB_flashing(void) {}
-void hal_FPGA_TEST_FB_set_aux_reset(void) {}
-void hal_FPGA_TEST_FB_clear_aux_reset(void) {}
-int hal_FPGA_TEST_FB_get_attn(void) {return 0;}
-void hal_FPGA_TEST_FB_set_rate(USHORT rate) { }
-
-void hal_FB_enable(void) {}
-void hal_FB_disable(void) {}
-const char * hal_FB_get_serial(void) {return "deadbeefdeadbeef";}
-USHORT hal_FB_get_fw_version(void) {return 0;}
-USHORT hal_FB_get_hw_version(void) {return 0;}
-void hal_FB_set_pulse_width(UBYTE value) {}
-void hal_FB_set_brightness(UBYTE value) {}
-void hal_FB_enable_LEDs(USHORT enables) {}
-void hal_FB_select_mux_input(UBYTE value) {}
-int hal_FB_xsvfExecute(int *p, int nbytes) {return 0;}
-void hal_FB_enable_min(void) {}
-int hal_FB_isEnabled(void) { return 0; }
-void hal_FB_set_DCDCen(int val) { }
-int hal_FB_get_DCDCen(void) { return 0; }
-
-int hal_FPGA_query_component_expected(DOM_HAL_FPGA_TYPES type,
-                                      DOM_HAL_FPGA_COMPONENTS cmp) {
-   return -1;
-}
-
-int hal_FPGA_query_component_version(DOM_HAL_FPGA_COMPONENTS cmp) {
-   return -1;
-}
-
-int hal_FPGA_dom_comm_version(void) {
-   return 0;
-}
-
-int hal_FPGA_dom_comm_expected_version(void) {
-   return 0;
-}
-
-void hal_FPGA_set_comm_params(int thresh, int dacmax,
-                              int rdelay, int sdelay,
-                              int minclev, int maxclev) {}
 
 
-void hal_FPGA_TEST_lc_sync_ff(void) {}
-void hal_FPGA_TEST_lc_sync_comparator(void) {}

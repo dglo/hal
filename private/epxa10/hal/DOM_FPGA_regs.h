@@ -2,8 +2,6 @@
  * \file DOM_FPGA_regs.h Description of the fpga registers...
  */
 
-#include "hal/DOM_FPGA_comm.h"
-
 /** 
  * Base address of the fpga code
  */
@@ -86,11 +84,6 @@
 #define   DOM_FPGA_TEST_SIGNAL_RESPONSE_ATWD1     (0x00000100)
 /** acquisition of a fast adc signal is done */
 #define   DOM_FPGA_TEST_SIGNAL_RESPONSE_FADC_DONE (0x00010000)
-/** presence of local coincidence signal corresp. to ATWD0 */
-#define DOM_FPGA_TEST_SIGNAL_RESPONSE_ATWD0_LC (0x00000002)
-/** presence of local coincidence signal corresp. to ATWD1 */
-#define DOM_FPGA_TEST_SIGNAL_RESPONSE_ATWD1_LC (0x00000200)
-
 
 /*@}*/
 
@@ -99,8 +92,7 @@
  * \ingroup fpga_test_regs
  *
  * \brief We use this register to control communications.
- *  The pulser rate sits in bits 16-19.  When bit bang mode
- *  is set, writes to bits 24-31 get output to the DAC...
+ *  The pulser rate sits in bits 16-19.
  */
 /*@{*/
 /** register address */
@@ -110,8 +102,6 @@
 #define   DOM_FPGA_TEST_COMM_DAC_TRIANGLE     (0x00000001)
 /** send a square wave out comm dac */
 #define   DOM_FPGA_TEST_COMM_DAC_SQUARE       (0x00000002)
-/** bit bang mode, access DAC directly */
-#define   DOM_FPGA_TEST_COMM_DAC_BIT_BANG     (0x00000004)
 /** acquire a comm adc signal */
 #define   DOM_FPGA_TEST_COMM_ADC              (0x00000010)
 /** ??? */
@@ -122,6 +112,8 @@
 #define   DOM_FPGA_TEST_COMM_RS_485_TX_ENABLE (0x00000400)
 /** ??? */
 #define   DOM_FPGA_TEST_COMM_RS_485_ENABLE    (0x00000800)
+
+
 /*@}*/
 
 /**
@@ -195,16 +187,6 @@
 #define   DOM_FPGA_TEST_MISC_LOCAL_UP           (0x00000001)
 /** switch on local coincidence with dom below */
 #define   DOM_FPGA_TEST_MISC_LOCAL_DOWN         (0x00000002)
-/** use fpga flip-flops to sync LC instead of comparator latch */
-#define   DOM_FPGA_TEST_MISC_LOCAL_SYNC_FF      (0x00000004)
-/** initiate upper/lower LC pulses when SPE disc. fires */
-#define   DOM_FPGA_TEST_MISC_LOCAL_SPE          (0x00000008)
-/** enable Rx from lower DOM - must use with DOM_FPGA_TEST_MISC_LOCAL_SPE */
-#define   DOM_FPGA_TEST_MISC_LOCAL_RX_LO        (0x00000010)
-/** enable Rx from upper DOM - must use with DOM_FPGA_TEST_MISC_LOCAL_SPE */
-#define   DOM_FPGA_TEST_MISC_LOCAL_RX_HI        (0x00000020)
-/** requires lc Rx from _both_ upper and lower DOMs */
-#define   DOM_FPGA_TEST_MISC_LOCAL_REQUIRE_UP_DOWN (0x00000040)
 /** send high pulse to lower dom */
 #define   DOM_FPGA_TEST_MISC_LOCAL_DOWN_HIGH    (0x00000100)
 /** send low pulse to lower dom */
@@ -262,8 +244,41 @@
 #define DOM_FPGA_TEST_MISC_RESPONSE_COINC_UP_BBAR   0x00008000
 /** flasher board read */
 #define   DOM_FPGA_TEST_MISC_RESPONSE_FL_ATTN      (0x01000000)
-/** flasher board read JTAG TDO */
-#define   DOM_FPGA_TEST_MISC_RESPONSE_FL_TDO       (0x10000000)
+/** flasher board read */
+#define   DOM_FPGA_TEST_MISC_RESPONSE_FL_TD0       (0x10000000)
+/*@}*/
+
+/**
+ * \defgroup fpga_test_hdv_control Control HDV
+ * \ingroup fpga_test_regs
+ *
+ * \brief Control the RS485 tranceiver
+ */
+
+
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_HDV_CONTROL (DOM_FPGA_TEST_BASE + 0x1018)
+/** */
+#define DOM_FPGA_TEST_HDV_CONTROL_In        (0x00000001)
+#define DOM_FPGA_TEST_HDV_CONTROL_Rx_ENABLE (0x00000002)
+#define DOM_FPGA_TEST_HDV_PULSE             (0x00000010)
+#define DOM_FPGA_TEST_HDV_AHB_MASTER_TEST   (0x00000100)
+/*@}*/
+
+/**
+ * \defgroup fpga_test_hdv_status HDV Status
+ * \ingroup fpga_test_regs
+ *
+ * \brief Status of the RS485 tranceiver
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_HDV_STATUS (DOM_FPGA_TEST_BASE + 0x101c)
+/** Receive data available */
+#define DOM_FPGA_TEST_HDV_STATUS_Rx (0x00000001)
+#define DOM_FPGA_TEST_HDV_AHB_MASTER_TEST_DONE (0x00000100)
+#define DOM_FPGA_TEST_HDV_AHB_MASTER_TEST_BUS_ERROR (0x00000200)
 /*@}*/
 
 /**
@@ -322,6 +337,79 @@ enum DOMPulserRates {
    /** ~.6kHz */
    DOMPulserRate_6k   = 0x70000
 };
+/*@}*/
+
+/**
+ * \defgroup fpga_test_com_ctrl Communications control
+ * \ingroup fpga_test_regs
+ *
+ * \brief This register contains control for the
+ * dom communications channel. bits 8-15 are dudt,
+ * bits, 16-25 are CAL_THR -- the calibration threshold.
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_COM_CTRL (DOM_FPGA_TEST_BASE + 0x1030)
+/** Signal that we're done reading a message from the Rx Fifo */
+#define DOM_FPGA_TEST_COM_CTRL_RX_DONE     0x00000001
+/** Request a reboot from com firmware */
+#define DOM_FPGA_TEST_COM_CTRL_REBOOT_REQUEST     0x00000004
+/*@}*/
+
+/**
+ * \defgroup fpga_test_com_status Communications status
+ * \ingroup fpga_test_regs
+ *
+ * \brief This register contains status information for the
+ * dom communications channel.
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_COM_STATUS (DOM_FPGA_TEST_BASE + 0x1034)
+/** Is there a message waiting on the Rx */
+#define DOM_FPGA_TEST_COM_STATUS_RX_MSG_READY     0x00000001
+/** for debugging hardware... */
+#define DOM_FPGA_TEST_COM_STATUS_RX_READ_EMPTY    0x00000002
+/** com firmware grants request for reboot */
+#define DOM_FPGA_TEST_COM_STATUS_REBOOT_GRANTED   0x00000004
+/** is the comm firmware available? */
+#define DOM_FPGA_TEST_COM_STATUS_AVAIL            0x00000008
+/** is the comm firmware available? */
+#define DOM_FPGA_TEST_COM_STATUS_RX_WRITE_ALMOST_FULL    0x00000040
+/** for debugging hardware... */
+#define DOM_FPGA_TEST_COM_STATUS_RX_WRITE_FULL    0x00000080
+/** for debugging hardware... */
+#define DOM_FPGA_TEST_COM_STATUS_RX_MSG_COUNT_MASK    0x0000ff00
+/** The transmit fifo is almost empty */
+#define DOM_FPGA_TEST_COM_STATUS_TX_FIFO_ALMOST_EMPTY 0x00010000
+/** The transmit fifo is almost full */
+#define DOM_FPGA_TEST_COM_STATUS_TX_FIFO_ALMOST_FULL  0x00020000
+/** for debugging hardware... */
+#define DOM_FPGA_TEST_COM_STATUS_TX_READ_EMPTY  0x00100000
+/*@}*/
+
+/**
+ * \defgroup fpga_test_com_tx_data Communications transmit data
+ * \ingroup fpga_test_regs
+ *
+ * \brief This register contains the fifo transmit data going to the
+ * dom communications channel.
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_COM_TX_DATA (DOM_FPGA_TEST_BASE + 0x1038)
+/*@}*/
+
+/**
+ * \defgroup fpga_test_com_rx_data Communications receive data
+ * \ingroup fpga_test_regs
+ *
+ * \brief This register contains the fifo receive data from the
+ * dom communications channel.
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_COM_RX_DATA (DOM_FPGA_TEST_BASE + 0x103C)
 /*@}*/
 
 /**
@@ -427,36 +515,12 @@ enum DOMPulserRates {
  * \defgroup fpga_test_led_atwd_delay Launch delay from on board led to ATWD
  * \ingroup fpga_test_regs
  *
- * \brief Low 4 bits are launch delay from on board led to ATWD.  bits
- * 12..15 are used for ATWD deadtime.  bit 8 is used to determine whether
- * the scalars are in fast mode or not...
- *
+ * \brief Low 4 bits are launch delay from on board led to ATWD.
  * Delay is (2+LED_ATWD_DELAY)*25ns
- *
- * \see DOM_FPGA_TEST_Deadtimes
  */
 /*@{*/
 /** register addresss */
 #define DOM_FPGA_TEST_LED_ATWD_DELAY (DOM_FPGA_TEST_BASE + 0x1060)
-
-/** set scalars to 10ms sample period (100ms is the default) */
-#define DOM_FPGA_TEST_LED_ATWD_DELAY_FAST_SCALAR (0x00000100)
-/*@}*/
-
-/**
- * \defgroup fpga_test_lcoin_launch_win Local Coin. window
- * \ingroup fpga_test_regs
- *
- * \brief This memory address consists of 4 6-bit words defining
- * local coincidence windows (in 50 nsec clock ticks)
- * LC_up_pre_window: bits 5 - 0
- * LC_up_post_window: bits 13 - 8
- * LC_down_pre_window: bits 21 - 16
- * LC_down_post_window: bits 29 - 24
- */
-/*@{*/
-/** register address */
-#define DOM_FPGA_TEST_LOCOIN_LAUNCH_WIN (DOM_FPGA_TEST_BASE + 0x1068)
 /*@}*/
 
 /**
@@ -519,15 +583,6 @@ enum DOMPulserRates {
 #define DOM_FPGA_TEST_ATWD1_DATA (DOM_FPGA_TEST_BASE + 0x5000)
 /*@}*/
 
-/**
- * \defgroup fpga_domapp_regs FPGA domapp Registers
- *
- * \brief Base address of the dom app registers
- */
-/*@{*/
-#define DOM_FPGA_DOMAPP_BASE (DOM_FPGA_BASE + 0x0)
-/*@}*/
- 
 /**
  * convenience macros
  */

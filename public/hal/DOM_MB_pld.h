@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_pld.h
  *
- * $Revision: 1.1.1.15 $
+ * $Revision: 1.19 $
  * $Author: arthur $
- * $Date: 2006-07-21 19:36:31 $
+ * $Date: 2003-10-27 18:13:31 $
  *
  * \b Usage:
  * \code
@@ -29,7 +29,7 @@
  *
  */
 BOOLEAN
-halIsSimulationPlatform(void);
+halIsSimulationPlatform();
 
 /**
  * This routine returns the version number of the firmware at the time
@@ -236,10 +236,7 @@ halReadBaseADC(void);
  * result in maximum permissible value being written to the selected DAC 
  * channel.  Values written to each DAC channel will be stored, on a channel 
  * by channel basis, within the hal library.  DAC values less than zero
- * will be assigned zero.  Also, we wait a DAC specific amount of time for
- * the analog side of the DAC to settle, depending on the time constant
- * of the circuit it drives (this time is typically 1us but can be as high
- * as 25ms)
+ * will be assigned zero.
  *
  * Errors: Requests to write a value to an undefined DAC channel will result 
  * in no action taken.  No error indication will be given.
@@ -292,28 +289,6 @@ void
 halWriteBaseDAC(USHORT value);
 
 /**
- * This routine enables the high voltage on the base.  This
- * is a separate enable from the ability to enable the base power
- * supply.
- *
- * \see halEnableBaseHV
- */
-void
-halDisableBaseHV(void);
-
-/**
- * This routine disables the high voltage on the base.  This
- * is a separate enable from the ability to enable the base power
- * supply.
- *
- * \see halDisableBaseHV
- * \see halPowerUpBase
- * \see halPowerDownBase
- */
-void
-halEnableBaseHV(void);
-
-/**
  * This routine returns the last value written to the specified DAC channel.  
  * Since no DACs support read back of set values, the returned value comes 
  * from local storage within the hal library.
@@ -346,7 +321,7 @@ halReadBaseDAC(void);
  * \see halDisableBarometer
  */
 void
-halEnableBarometer(void);
+halEnableBarometer();
 
 /**
  * This routine removes power from the analog barometer sensor located on 
@@ -357,84 +332,41 @@ halEnableBarometer(void);
  * \see halEnableBarometer
  */
 void
-halDisableBarometer(void);
-
-/**
- * This routine prepares to read a value from the DOM MB mounted 
- * temperature sensor.  This routine requires a matched call to
- * halFinishReadTemp.
- *
- * \see halReadTemp
- * \see halFinishReadTemp
- */
-void
-halStartReadTemp(void);
-
-/**
- * This routine checks to see if a previous call to halStartReadTemp
- * had returned a value to the temperature sensor.
- *
- * \see halReadTemp
- * \see halStartReadTemp
- * \see halFinishReadTemp
- */
-int
-halReadTempDone(void);
+halDisableBarometer();
 
 /**
  * This routine reads a value from the DOM MB mounted temperature sensor.  
  * Calibration and interpretation of return values is not defined in this 
- * document.  This routine must be called after halStartReadTemp.  Normally,
- * one would use halReadTemp to readout the temperature sensor.
+ * document.
  *
- * \see halStartReadTemp
- * \see halReadTemp
  */
 USHORT
-halFinishReadTemp(void);
-
-/**
- * This routine reads a value from the DOM MB mounted temperature sensor.  
- * Calibration and interpretation of return values is not defined in this 
- * document.  This routine is equivalent to:
- * halStartReadTemp();
- * halFinishReadTemp();
- *
- * \see halStartReadTemp
- * \see halFinishReadTemp
- */
-USHORT
-halReadTemp(void);
+halReadTemp();
 
 /**
  * This routine enables operation of the PMT high voltage power supply.  
  * Detailed behavior of the high voltage power supply is defined elsewhere.  
  * But, no voltage will be supplied to the PMT unless the power supply has 
- * been enabled.  By default, the base output voltage is disabled, it can
- * be enabled with halEnableBaseHV
+ * been enabled.
  *
- * \see halPowerDownBase
- * \see halWriteBaseDAC
- * \see halReadBaseADC
- * \see halDisableBaseHV
- * \see halEnableBaseHV
+ * \see halDisablePMT_HV
+ * \see halSetPMT_HV
+ * \see halReadPMT_HV
  */
 void
-halPowerUpBase(void);
+halEnablePMT_HV();
 
 /**
  * This routine disables operation of the PMT high voltage power supply.  
  * Detailed descriptions of high voltage power supply operation appears 
  * elsewhere.
  *
- * \see halPowerUpBase
- * \see halWriteBaseDAC
- * \see halReadBaseADC
- * \see halDisableBaseHV
- * \see halEnableBaseHV
+ * \see halEnablePMT_HV
+ * \see halSetPMT_HV
+ * \see halReadPMT_HV
  */
 void
-halPowerDownBase(void);
+halDisablePMT_HV();
 
 /**
  * power up flasher board
@@ -462,24 +394,6 @@ halDisableFlasher();
  */
 BOOLEAN
 halFlasherState();
-
-/**
- * Enable flasher board JTAG programming.  Must also
- * enable FPGA control of flasher board JTAG ports.
- *
- * \see halDisableFlasherJTAG
- */
-void
-halEnableFlasherJTAG();
-
-/**
- * Disable flasher board JTAG programming.  Must also
- * disable FPGA control of flasher board JTAG ports.
- *
- * \see halEnableFlasherJTAG
- */
-void
-halDisableFlasherJTAG();
 
 /**
  * power up LED power supply
@@ -528,6 +442,36 @@ void
 halStepDownLED();
 
 /**
+ * This routine sets the target output value of the PMT high voltage power 
+ * supply.  Calibrated translation of digital values into power supply 
+ * output voltages is not part of this interface and will be described 
+ * elsewhere.  
+ *
+ * Errors: Attempts to set the target output value to a value in excess of the 
+ * maximum set value will result in NO ACTION BEING TAKEN.  Unlike the 
+ * behavior of the writeDAC() interface, errors of this sort are assumed 
+ * to indicate incorrect program behavior and are considered invalid requests.
+ *
+ * \see halEnablePMT_HV
+ * \see halDisablePMT_HV
+ * \see halReadPMT_HV
+ */
+void
+halSetPMT_HV(USHORT value);
+
+/** 
+ * This routine reads the current output value of the PMT high voltage power 
+ * supply.  Calibrated translation of this value into power supply output 
+ * voltage is not part of this interface and will be described elsewhere.
+ *
+ * \see halEnablePMT_HV
+ * \see halDisablePMT_HV
+ * \see halSetPMT_HV
+ */
+USHORT
+halReadPMT_HV();
+
+/**
  * This routine selects one (only) of eight possible analog input sources 
  * for the ATWD channel 0.  It also allows the disabling of all possible 
  * inputs.
@@ -540,13 +484,6 @@ halStepDownLED();
  */
 void
 halSelectAnalogMuxInput(UBYTE channel);
-
-/**
- * disables analog mux
- */
-void
-halDisableAnalogMux(void);
-
 
 /**
  * set swap flash memory chips...
@@ -582,28 +519,12 @@ const char *
 halGetBoardID();
 
 /**
- * get the main board serial number (id) as a 48 bit number
- *
- * \return board id or 0 on error...
- */
-unsigned long long
-halGetBoardIDRaw(void);
-
-/**
  * busy wait us microseconds.
  *
  * \param us microseconds to busy wait.
  */
 void
 halUSleep(int us);
-
-/**
- * busy wait ns nanoseconds.
- *
- * \param ns nanoseconds to busy wait.
- */
-void
-halNanoSleep(unsigned ns);
 
 /**
  * read high voltage base serial number
@@ -614,40 +535,12 @@ const char *
 halHVSerial(void);
 
 /**
- * read high voltage base serial number
- *
- * \return serial number as a long long or 0 on error...
- */
-unsigned long long
-halHVSerialRaw(void);
-
-/**
- * Perform Dallas one-wire CRC check on an 
- * HV or FB serial number.
- *
- * \param buf ID string
- * \param len length of ID string
- *
- * \return 0 if OK, nonzero otherwise
- */
-int 
-halCheckCRC(unsigned char buf[], int len);
-
-/**
  * check to see if fpga is loaded
  *
  * \return non-zero if fpga is loaded
  */
-int
-halIsFPGALoaded(void);
-
-/**
- * check to see if input data is there
- *
- * \return non-zero if there is data to read on stdin
- */
 int 
-halIsInputData(void);
+halIsFPGALoaded(void);
 
 /**
  * number of dom dac chip select lines...
@@ -690,11 +583,11 @@ typedef enum {
    /** Flasher board LED current*/
    DOM_HAL_MUX_FLASHER_LED_CURRENT,
 
-   /** Local Coincidence Signal (lower) */
-   DOM_HAL_MUX_LOWER_LOCAL_COINCIDENCE,
-
    /** Local Coincidence Signal (upper) */
    DOM_HAL_MUX_UPPER_LOCAL_COINCIDENCE,
+
+   /** Local Coincidence Signal (lower) */
+   DOM_HAL_MUX_LOWER_LOCAL_COINCIDENCE,
 
    /** Communications ADC input signal */
    DOM_HAL_MUX_COMM_ADC_INPUT,
@@ -735,20 +628,20 @@ typedef enum {
    DOM_HAL_DAC_MULTIPLE_SPE_THRESH,
    /** single SPE discriminator threshold */
    DOM_HAL_DAC_SINGLE_SPE_THRESH,
-   /** fast ADC reference (pedestal shift) */
-   DOM_HAL_DAC_FAST_ADC_REF,
-   /** internal pulser amplitude */
-   DOM_HAL_DAC_INTERNAL_PULSER,
-
-   /* CS3 */
    /** on-board LED brightness control */
    DOM_HAL_DAC_LED_BRIGHTNESS,
-   /** front end amp lower clamp voltage -- CURRENTLY UNUSED */
+   /** fast ADC reference (pedestal shift) */
+   DOM_HAL_DAC_FAST_ADC_REF,
+
+   /* CS3 */
+   /** internal pulser amplitude */
+   DOM_HAL_DAC_INTERNAL_PULSER,
+   /** front end amp lower clamp voltage */
    DOM_HAL_DAC_FE_AMP_LOWER_CLAMP,
-   /** flasher board timing pulse offset voltage */
-   DOM_HAL_DAC_FL_REF,
-   /** Set the DC offset of the ATWD mux input */
-   DOM_HAL_DAC_MUX_BIAS
+   /** spare 10 bit ADC output 0 */
+   DOM_HAL_DAC_SPARE_ADC0,
+   /** spare 10 bit ADC output 1 */
+   DOM_HAL_DAC_SPARE_ADC1
 } DOM_HAL_DAC_CHANNELS;
 
 /**
@@ -760,9 +653,9 @@ typedef enum {
 typedef enum {
    /* CS0 */
 
-   /** voltage sum node: -5+(3.3+5)*162/(100+162) volts */
+   /** voltage sum node: -(-5/2.5)-(+3.3+2.5+1.8)/4 volts */
    DOM_HAL_ADC_VOLTAGE_SUM,
-   /** 5V power supply value = Reading 0+5*(10K/25K) volts */
+   /** 5V power supply value = Reading (2.5/4095)*(10K/34.9K) */
    DOM_HAL_ADC_5V_POWER_SUPPLY,
    /** 
     * Pressure -- Value = 
@@ -779,40 +672,6 @@ typedef enum {
    DOM_HAL_ADC_1_8V_CURRENT,
    /** -5V analog current monitor (10mV/mA) measured on 5V side of switcher */
    DOM_HAL_ADC_MINUS_5V_CURRENT,
-   /** DISC-OneSPE */
-   DOM_HAL_ADC_DISC_ONESPE,
-   /** 1.8V analog voltage */
-   DOM_HAL_ADC_1_8V_POWER_SUPPLY,
-   /** 2.5V analog voltage */
-   DOM_HAL_ADC_2_5V_POWER_SUPPLY,
-   /** 3.3V analog voltage */
-   DOM_HAL_ADC_3_3V_POWER_SUPPLY,
-   /** DISC-MultiSPE */
-   DOM_HAL_ADC_DISC_MULTISPE,
-   /** FADC Reference */
-   DOM_HAL_ADC_FADC_0_REF,
-   /** Single LED-HV */
-   DOM_HAL_ADC_SINGLELED_HV,
-   /** DAC0 Channel A */
-   DOM_HAL_ADC_ATWDA_TRIGGER_BIAS_CURRENT,
-   /** DAC0 Channel B */
-   DOM_HAL_ADC_ATWDA_RAMP_TOP_VOLTAGE,
-   /** DAC0 Channel C */
-   DOM_HAL_ADC_ATWDA_RAMP_BIAS_CURRENT,
-   /** Analog Reference */
-   DOM_HAL_ADC_ANALOG_REF,
-   /** DAC1 Channel A */
-   DOM_HAL_ADC_ATWDB_TRIGGER_BIAS_CURRENT,
-   /** DAC1 Channel B */
-   DOM_HAL_ADC_ATWDB_RAMP_TOP_VOLTAGE,
-   /** DAC1 Channel C */
-   DOM_HAL_ADC_ATWDB_RAMP_BIAS_CURRENT,
-   /** Pedestal Value */
-   DOM_HAL_ADC_PEDESTAL,
-   /** FE Test Pulse Amplifier */
-   DOM_HAL_ADC_FE_TEST_PULSE_AMPL
-   
-
 } DOM_HAL_ADC_CHANNELS;
 
 

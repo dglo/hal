@@ -4,8 +4,8 @@
 #
 OBJS = hal.o
 
-%.o : %.c
-	$(CC) -m32 -c $(CFLAGS) $<
+.c.o:
+	$(CC) -c $(CFLAGS) $<
 
 all: $(LIBHAL)
 
