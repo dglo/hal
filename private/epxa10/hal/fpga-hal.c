@@ -441,6 +441,21 @@ void hal_FPGA_TEST_stop_FB_flashing(void) {
     FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, FL_TRIGGER);
 }
 
+void hal_FPGA_TEST_FB_set_aux_reset(void) {
+    FPGA(TEST_MISC) |=  FPGABIT(TEST_MISC, FL_PRE_TRIGGER);
+}
+
+void hal_FPGA_TEST_FB_clear_aux_reset(void) {
+    FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, FL_PRE_TRIGGER);
+}
+
+int hal_FPGA_TEST_FB_get_attn(void) {
+    if (FPGA(TEST_MISC_RESPONSE) & FPGABIT(TEST_MISC_RESPONSE, FL_ATTN))
+        return 1;
+    else
+        return 0;
+}
+
 void hal_FPGA_TEST_FB_JTAG_enable(void) {
     FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, FL_EN_JTAG);
 }

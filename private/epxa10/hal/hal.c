@@ -12,8 +12,6 @@
 
 #include "dom-cpld/pld-version.h"
 
-static int  dowCRC(unsigned char buf[], int len);
-
 static void max5250Write(int chan, int val);
 static void max525Write(int chan, int val);
 static void max534Write(int chan, int val);
@@ -987,7 +985,7 @@ unsigned long long halHVSerialRaw(void) {
 	       id[i/8] |= 0x80;
 	    }
 	 }
-      } while (dowCRC(id, 8) && retry++ < 5);
+      } while (halCheckCRC(id, 8) && retry++ < 5);
       if (retry < 5) {
 	 memcpy(&hvid, id+1, 6);
 	 isInit = 1;
@@ -1166,7 +1164,7 @@ int halIsInputData(void) {
  * Compute the Dallas 1-Wire CRC of a stream of bytes.
  * Returns 0 on success, 1 on error.
  */
-static int dowCRC(unsigned char s[], int length) {
+int halCheckCRC(unsigned char s[], int length) {
     /*
      * This table taken from page 131 of
      * The DS19XX Book of iButton Standards

@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_fpga.h
  *
- * $Revision: 1.40.2.1 $
+ * $Revision: 1.40.2.2 $
  * $Author: arthur $
- * $Date: 2004-11-20 00:44:21 $
+ * $Date: 2004-11-24 19:47:10 $
  *
  * \b Usage:
  * \code
@@ -500,6 +500,42 @@ hal_FPGA_TEST_start_FB_flashing(void);
  */
 void
 hal_FPGA_TEST_stop_FB_flashing(void);
+
+/**
+ * Auxiliary reset control for the flasher board.
+ * Sets the auxiliary reset bit -- used during the
+ * FB CPLD acknowledge sequence.
+ * 
+ * \see hal_FPGA_TEST_FB_clear_aux_reset
+ * \see hal_FPGA_TEST_FB_get_attn
+ *
+ */
+void 
+hal_FPGA_TEST_FB_set_aux_reset(void);
+
+/**
+ * Auxiliary reset control for the flasher board.
+ * Clears the auxiliary reset bit -- used during
+ * FB CPLD acknowledge power-up sequence.
+ * 
+ * \see hal_FPGA_TEST_FB_set_aux_reset
+ * \see hal_FPGA_TEST_FB_get_attn
+ *
+ */
+void 
+hal_FPGA_TEST_FB_clear_aux_reset(void);
+
+/**
+ * Reads the flasher board ATTN bit.  Used during
+ * FB CPLD acknowledge power-up sequence.
+ * 
+ * \see hal_FPGA_TEST_FB_set_aux_reset
+ * \see hal_FPGA_TEST_FB_clear_aux_reset
+ *
+ * \returns value of ATTN bit (0/1)
+ */
+int 
+hal_FPGA_TEST_FB_get_attn(void);
 
 /**
  * Routine that enables FB JTAG port control.  Must

@@ -38,8 +38,12 @@
 
 /* One-wire control -- used to read ID */
 #define DOM_FB_ONE_WIRE      (DOM_FB_BASE + 0x00000006)
-#define DOM_FB_ONE_WIRE_BUSY 0x20
-#define DOM_FB_ONE_WIRE_DATA 0x40
+#define DOM_FB_ONE_WIRE_PRESENT 0x10
+#define DOM_FB_ONE_WIRE_BUSY    0x20
+#define DOM_FB_ONE_WIRE_DATA    0x40
+
+/* Local clock counter, low byte */
+#define DOM_FB_CLK_LO        (DOM_FB_BASE + 0x00000007)
 
 /* Pulse width adjustment, 8b */
 #define DOM_FB_DELAY_ADJUST  (DOM_FB_BASE + 0x00000008)
@@ -74,6 +78,9 @@
 
 /* Delay chip enable, 1b WO */
 #define DOM_FB_LE_DP         (DOM_FB_BASE + 0x0000000e)
+
+/* Local clock counter, high byte */
+#define DOM_FB_CLK_HI        (DOM_FB_BASE + 0x0000000f)
 
 /* usage: FB(DELAY_ADJUST) */
 #define FB(a) ( *(volatile UBYTE *) DOM_FB_##a )

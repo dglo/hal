@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_pld.h
  *
- * $Revision: 1.32 $
+ * $Revision: 1.32.6.1 $
  * $Author: arthur $
- * $Date: 2004-05-18 21:36:29 $
+ * $Date: 2004-11-24 19:47:10 $
  *
  * \b Usage:
  * \code
@@ -605,6 +605,18 @@ halHVSerial(void);
  */
 unsigned long long
 halHVSerialRaw(void);
+
+/**
+ * Perform Dallas one-wire CRC check on an 
+ * HV or FB serial number.
+ *
+ * \param buf ID string
+ * \param len length of ID string
+ *
+ * \return 0 if OK, nonzero otherwise
+ */
+int 
+halCheckCRC(unsigned char buf[], int len);
 
 /**
  * check to see if fpga is loaded
