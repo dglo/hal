@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_fb.h
  *
- * $Revision: 1.4.6.1 $
+ * $Revision: 1.4.6.2 $
  * $Author: arthur $
- * $Date: 2004-11-24 19:47:10 $
+ * $Date: 2005-03-15 22:55:18 $
  *
  * \b Usage:
  * \code
@@ -31,11 +31,12 @@
  *
  * \param config_t pointer to record CPLD configuration time in us
  * \param valid_t pointer to record clock validation time in us
+ * \param reset_t pointer to record power-on reset time in us
  *
  * \return 0 if success, nonzero on error
  */
 int
-hal_FB_enable(int *config_t, int *valid_t);
+hal_FB_enable(int *config_t, int *valid_t, int *reset_t);
 
 /**
  * Routine that powers the flasher board, but doesn't perform
@@ -162,6 +163,14 @@ void
 hal_FB_enable_LEDs(USHORT enables);
 
 /**
+ * Routine that sets the flasher board rate.
+ * 
+ * \param Rate in Hz
+ */
+void
+hal_FB_set_rate(USHORT rate);
+
+/**
  * Routine that enables the video mux and selects which 
  * LED's current is sent back to the mainboard (and the ATWDs).
  * Can also select the 3.3v driver pulse.  Also allows for
@@ -216,5 +225,6 @@ hal_FB_xsvfExecute(int *p, int nbytes);
 #define FB_HAL_ERR_VALID_TIME      -2
 #define FB_HAL_ERR_ID_NOT_PRESENT  -3
 #define FB_HAL_ERR_ID_BAD_CRC      -4
+#define FB_HAL_ERR_RESET_TIME      -5
 
 #endif

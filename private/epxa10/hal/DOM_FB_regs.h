@@ -9,7 +9,9 @@
 #define DOM_FB_BASE (0x60000000)
 
 /* Flasher board layout version, RO */
+/* CPLD V11 and later: contains power-on reset bit, active low */
 #define DOM_FB_VERSION       (DOM_FB_BASE + 0x00000000)
+#define DOM_FB_VERSION_RESET_ACKN  0x80
 
 /* Addressing resets CPLD; data ignored */
 #define DOM_FB_RESET         (DOM_FB_BASE + 0x00000001)

@@ -1,11 +1,13 @@
 /**
  * \file fb-hal.c
  *
- * $Revision: 1.8.2.3 $
+ * $Revision: 1.8.2.4 $
  * $Author: arthur $
- * $Date: 2005-02-04 00:00:12 $
+ * $Date: 2005-03-15 22:55:18 $
  *
  * The DOM flasher board HAL.
+ *
+ * Modified 2005-1-22 Jacobsen - support adjustable rate and ATWD launch delay 
  *
  */
 #include <stddef.h>
@@ -17,6 +19,7 @@
 
 #include "hal/DOM_MB_hal.h"
 #include "DOM_FB_regs.h"
+#include "DOM_FPGA_regs.h"
 #include "fb-hal.h"
 
 int getFBclock(void) {
@@ -25,21 +28,27 @@ int getFBclock(void) {
 
 static int fbIsPowered = 0;
 
-int hal_FB_enable(int *config_time, int *valid_time) {
+int hal_FB_enable(int *config_time, int *valid_time, int *reset_time) {
 
     /* Loop timeout limit for ATTN ack sequence, in us */
     int ack_timeout = 50000;
+
     /* Loop timeout limit for clock validation check, in us */
     int vld_timeout = 500000;
+
+    /* Loop timeout limit for reset ack sequence, in us */
+    /* Note must be > ack_timeout + vld_timeout to make sense */
+    int rst_timeout = 600000;
 
     /* Keep track of time required for reset sequence */
     *config_time = 0;
     *valid_time  = 0;
+    *reset_time  = 0;
 
     /* Enable the flasherboard interface in the mainboard CPLD */
-    /* Also wait a bit for power-up */
     halEnableFlasher();
-    
+    unsigned long long reset_start_time = hal_FPGA_TEST_get_local_clock();
+
     /* Start FPGA ack reset sequence -- aux reset functions independently */
     /* of 20MHz clock to test for CPLD configuration */
     int attn, last_attn;
@@ -80,24 +89,33 @@ int hal_FB_enable(int *config_time, int *valid_time) {
     start_time = hal_FPGA_TEST_get_local_clock();
     int fb_clk_us;
     int vld_cnt = 0;
+    unsigned long long stable_start = 0;
+    unsigned long long now, loop_start;
+    int stable_time = 0;
+
     while (!done) {
 
+        loop_start = hal_FPGA_TEST_get_local_clock();
+        
         /* Reset the flasherboard CPLD, and wait 250us */
         FB(RESET) = 0x1;
         halUSleep(250);
 
         /* Check the FB counter */
         fb_clk_us = getFBclock() / (FB_HAL_TICKS_PER_SEC / 1000000);
-        if (abs(fb_clk_us - 250) < 5)
+        if (abs(fb_clk_us - 250) < 5) {
+            if (vld_cnt == 0)
+                stable_start = loop_start;
             vld_cnt++;
+
+        }
         else
             vld_cnt = 0;
 
-        /* printf("DEBUG: fbclk time is %d\r\n", fb_clk_us); */
-
         /* Monitor how long this is taking */
-        *valid_time = (int)(hal_FPGA_TEST_get_local_clock() - start_time) / 
-            (FPGA_HAL_TICKS_PER_SEC / 1000000);
+        now = hal_FPGA_TEST_get_local_clock();
+        *valid_time = (int)(now - start_time) / (FPGA_HAL_TICKS_PER_SEC / 1000000);        
+        stable_time = (int)(now - stable_start) / (FPGA_HAL_TICKS_PER_SEC / 1000000);        
 
         /* Are we done? Check that clock is running and is stable */
         done = (*valid_time > vld_timeout) || (vld_cnt == 8);
@@ -108,6 +126,31 @@ int hal_FB_enable(int *config_time, int *valid_time) {
         hal_FB_disable();
         return FB_HAL_ERR_VALID_TIME;
     }
+
+    /* Correct valid time for stable period */
+    *valid_time -= stable_time;
+
+    /* Validate that the power-on reset has occurred */
+    done = 0;
+    int reset_ack = 0;
+    while (!done) {
+
+        /* Check the power-on reset ACK bit (active low) */
+        reset_ack = ((FB(VERSION) &  DOM_FB_VERSION_RESET_ACKN) == 0);
+
+        /* Monitor how long this is taking */
+        *reset_time = (int)(hal_FPGA_TEST_get_local_clock() - reset_start_time) / 
+            (FPGA_HAL_TICKS_PER_SEC / 1000000);
+
+        /* Are we done? Check that clock is running and is stable */
+        done = (*reset_time > rst_timeout) || (reset_ack);
+    }
+
+    if (*reset_time > rst_timeout) {
+        hal_FPGA_TEST_FB_clear_aux_reset();
+        hal_FB_disable();
+        return FB_HAL_ERR_RESET_TIME;
+    }    
 
     /* Wait a bit longer just to be sure clock is stable */
     halUSleep(*valid_time / 5);
@@ -258,7 +301,8 @@ USHORT hal_FB_get_fw_version(void) {
  * Routine to get the flasher board layout version. 
  */
 USHORT hal_FB_get_hw_version(void) {
-    return FB(VERSION);
+    /* Mask out reset ack bit */
+    return (FB(VERSION) & ~DOM_FB_VERSION_RESET_ACKN);
 }
 
 /**
@@ -349,6 +393,21 @@ void hal_FB_select_mux_input(UBYTE value) {
 
     FB(LED_MUX_EN) = enable;
     FB(LED_MUX)    = select;
+}
+
+void hal_FB_set_rate(USHORT rate) {
+/* Sets flasher board rate -- minimum 1 Hz, max. 610 Hz */
+#define NRATES 10
+  USHORT table[NRATES] = { 610, 305, 153, 76, 38, 19, 10, 5, 2, 1 };
+  UBYTE ratebits = 0;
+  int it;
+  for(it=NRATES-1;it>0;it--) {
+    if(rate <= table[it]) {
+      ratebits = it; break;
+    }
+  }
+  FPGA(TEST_COMM) = FPGA(TEST_COMM) & ~(0xF<<16);
+  FPGA(TEST_COMM) = FPGA(TEST_COMM) | ((ratebits<<16)&0xF);
 }
 
 /*************************************************************************/
