@@ -66,19 +66,24 @@
 /**
  * \file DOM_MB_hal.h
  *
- * $Revision: 1.12 $
- * $Author: arthur $
- * $Date: 2003-01-24 21:37:54 $
+ * $Revision: 1.1 $
+ * $Author: mcp $
+ * $Date: 2003-03-04 02:21:33 $
  *
  * \b Usage:
  * \code
-#include "hal/DOM_MB_hal.h"
+ * #include "hal/DOM_MB_hal.h"
  * \endcode
  *
  * DOM main board hardware access library interface
  *
  */
-#include "hal/DOM_MB_pld.h"
-#include "hal/DOM_MB_fpga.h"
+#include "hal/DOM_MB_types.h"
+#include "hal/DOM_MB_pld_simul.h"
+#include "hal/DOM_MB_fpga_simul.h"
+
+// simulation specific functions
+void halSetBoardID(char *ID);
+void hasSetBoardName(char *name);
 
 #endif
