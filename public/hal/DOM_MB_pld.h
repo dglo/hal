@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_pld.h
  *
- * $Revision: 1.19 $
+ * $Revision: 1.20 $
  * $Author: arthur $
- * $Date: 2003-10-27 18:13:31 $
+ * $Date: 2003-10-31 17:38:33 $
  *
  * \b Usage:
  * \code
@@ -628,20 +628,20 @@ typedef enum {
    DOM_HAL_DAC_MULTIPLE_SPE_THRESH,
    /** single SPE discriminator threshold */
    DOM_HAL_DAC_SINGLE_SPE_THRESH,
-   /** on-board LED brightness control */
-   DOM_HAL_DAC_LED_BRIGHTNESS,
    /** fast ADC reference (pedestal shift) */
    DOM_HAL_DAC_FAST_ADC_REF,
-
-   /* CS3 */
    /** internal pulser amplitude */
    DOM_HAL_DAC_INTERNAL_PULSER,
+
+   /* CS3 */
+   /** on-board LED brightness control */
+   DOM_HAL_DAC_LED_BRIGHTNESS,
    /** front end amp lower clamp voltage */
    DOM_HAL_DAC_FE_AMP_LOWER_CLAMP,
-   /** spare 10 bit ADC output 0 */
-   DOM_HAL_DAC_SPARE_ADC0,
-   /** spare 10 bit ADC output 1 */
-   DOM_HAL_DAC_SPARE_ADC1
+   /** ??? */
+   DOM_HAL_DAC_FL_REF,
+   /** Set the DC offset of the ATWD mux input */
+   DOM_HAL_DAC_MUX_BIAS
 } DOM_HAL_DAC_CHANNELS;
 
 /**

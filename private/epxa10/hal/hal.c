@@ -28,6 +28,7 @@ static void waitus(int us);
 static void writeLTC1257(int val);
 static void writeLTC1451(int val);
 static int readLTC1286(void);
+static int max1139Read(int cs, int ch);
 
 BOOLEAN halIsSimulationPlatform() { return 0; }
 
@@ -61,22 +62,7 @@ BOOLEAN halFlashBootState() {
 USHORT halReadBaseADC(void) { return readLTC1286(); }
 
 USHORT halReadADC(UBYTE channel) {
-   int ret;
-   const int mapping[] = { 0, 4, 1, 5, 2, 6, 3, 7 };
-   
-   const int cs = channel/8;
-   const int dev = mapping[channel%8];
-   
-   /* FIXME: eventually we'll need a mutex here...
-    */
-   PLD(SPI_CHIP_SELECT0) = ~(1<<(5+cs));
-
-   if (cs==0) {
-      ret = max146Read(dev);
-   }
-   
-   PLD(SPI_CHIP_SELECT0) = ~0;
-   return ret;
+   return max1139Read(channel/12, channel % 12);
 }
 
 static int daclookup[DOM_HAL_NUM_DAC_CHANNELS];
@@ -105,7 +91,6 @@ static int fixupDACValue(int ch, int value) {
    if (value>dacMaxValues[ch]) return dacMaxValues[ch];
    return value;
 }
-
 
 void halWriteDAC(UBYTE channel, int value) {
    const int cs = channel/4;
@@ -840,4 +825,163 @@ const char *halHVSerial(void) {
    return t;
 }
 
-int halIsFPGALoaded(void) { return PLD(FPGA_PLD)==0x55; }
+int halIsFPGALoaded(void) { return RPLDBIT(MISC, FPGA_LOADED)==0; }
+
+static unsigned char adcCSLow(int cs) { return ~(1<<(cs+5)); }
+static unsigned char adcCSHigh(int cs) { return ~0; }
+static unsigned char adcCLKLow(void)  { return PLDBIT(SPI_CTRL, DAC_CL); }
+static unsigned char adcCLKHigh(void) { 
+   return PLDBIT(SPI_CTRL, DAC_CL)|PLDBIT(SPI_CTRL, SERIAL_CLK); 
+}
+
+/* i2c start condition...
+ *
+ * no assumptions about clock
+ *
+ * lv data low and clock high...
+ */
+static void startMax1139(int cs) {
+   /* both high... */
+   PLD(SPI_CHIP_SELECT0) = adcCSHigh(cs);
+   PLD(SPI_CTRL) = adcCLKHigh();
+   waitus(1);
+   
+   /* drop data... */
+   PLD(SPI_CHIP_SELECT0) = adcCSLow(cs);
+   waitus(1);
+
+   /* drop clock... */
+   PLD(SPI_CTRL) = adcCLKLow();
+   waitus(1);
+}
+
+/* i2c stop condition...
+ *
+ * assume clock is low...
+ *
+ * lv clock and data high...
+ */
+static void stopMax1139(int cs) {
+   /* data goes low...
+    */
+   PLD(SPI_CHIP_SELECT0) = adcCSLow(cs);
+   waitus(1);
+
+   /* now clock goes high...
+    */
+   PLD(SPI_CTRL) = adcCLKHigh();
+   waitus(1);
+
+   /* now raise data to signal stop...
+    */
+   PLD(SPI_CHIP_SELECT0) = adcCSHigh(cs);
+   waitus(1);
+}
+
+/* i2c routines...
+ *
+ * to write a byte we assume:
+ *   clock is low
+ *   data is undefined...
+ * 
+ * we transition data on clock low...
+ * we lv clock low...
+ */
+static void writeMax1139Byte(int cs, int val) {
+   int mask = 0x80, i, ack;
+   for (i=0; i<8; i++, mask>>=1) {
+      const int bit = 
+	 (val&mask) ? adcCSHigh(cs) : adcCSLow(cs);
+      
+      /* set data, raise clock and wait -- data are sample here...
+       */
+      PLD(SPI_CHIP_SELECT0) = bit;
+      PLD(SPI_CTRL) = adcCLKHigh();
+      waitus(1);
+
+      /* drop the clock and wait...
+       */
+      PLD(SPI_CTRL) = adcCLKLow();
+      waitus(1);
+   }
+
+   /* get ack, drop clock, wait, raise clock, wait, sample...
+    */
+   PLD(SPI_CHIP_SELECT0) = adcCSHigh(cs);
+   PLD(SPI_CTRL) = adcCLKHigh();
+   waitus(1);
+   
+   ack = PLD(SPI_CHIP_SELECT0) & (1<<(cs+5));
+
+   /* printf("ack: %d\r\n", ack); */
+
+   /* FIXME: check ack?  should be 0
+    */
+
+   PLD(SPI_CTRL) = adcCLKLow();
+   waitus(1);
+}
+
+/* assume clock is low on entry
+ *
+ * we lv clock low and data high...
+ */
+static int readMax1139Byte(int cs, int ack) {
+   int val = 0;
+   int i;
+
+   /* make sure we are high Z
+    */
+   PLD(SPI_CHIP_SELECT0) = adcCSHigh(cs);
+   
+   for (i=0; i<8; i++) {
+      /* raise clock... */
+      PLD(SPI_CTRL) = adcCLKHigh();
+      waitus(1);
+      
+      /* read data... */
+      val = (val<<1) | ( (PLD(SPI_CHIP_SELECT0) & (1<<(cs+5))) ? 1 : 0 );
+
+      /* drop clock... */
+      PLD(SPI_CTRL) = adcCLKLow();
+      waitus(1);
+   }
+   
+   /* send nack...
+    */
+   if (ack==0) PLD(SPI_CHIP_SELECT0) = adcCSHigh(cs);
+   else PLD(SPI_CHIP_SELECT0) = adcCSLow(cs);
+
+   PLD(SPI_CTRL) = adcCLKHigh();
+   waitus(1);
+
+   PLD(SPI_CTRL) = adcCLKLow();
+   waitus(1);
+
+   return val;
+}
+
+static int max1139Read(int cs, int ch) {
+   int val;
+
+   /* set channel to readout... */
+   startMax1139(cs);
+   writeMax1139Byte(cs, 0x6a); /* 0110 1010 */
+   writeMax1139Byte(cs, 0xD8); /* 1101 1000 */
+   writeMax1139Byte(cs, (ch<<1) | 0x61); /* 0110 0000 */
+   stopMax1139(cs);
+
+   /* start readout... */
+   startMax1139(cs); /* start condition... */
+   writeMax1139Byte(cs, 0x6b); /* 0110 1011 */
+   val = readMax1139Byte(cs, 1)&3;
+   val <<= 8;
+   val += (readMax1139Byte(cs, 1)&0xff);
+   stopMax1139(cs);
+
+   return val;
+}
+
+
+
+
