@@ -12,6 +12,11 @@
 
 #include "dom-cpld/pld-version.h"
 
+/* use the 3.3V Vdd reference voltage for the max1139?
+ */
+#undef USE_VREF_3_3
+#define USE_VREF_3_3
+
 static void max5250Write(int chan, int val);
 static void max525Write(int chan, int val);
 static void max534Write(int chan, int val);
@@ -89,7 +94,27 @@ USHORT halReadADC(UBYTE channel) {
     */
    static int init = 0;
    if (!init) { max1139Read(channel/12, channel % 12); init = 1; }
+
+#if defined(USE_VREF_3_3)
+   /* we've moved the internal reference to Vdd (3.3V), two reprocussions:
+    *
+    * 1) we need to average a few samples together now to get a decent
+    *    reading.
+    * 2) we need to rescale the counts by new_counts=counts*2048/3300
+    */
+   {
+      unsigned sum = 0;
+      int i;
+      const int n = 8;
+      for (i=0; i<n; i++) {
+         sum += max1139Read(channel/12, channel % 12);
+      }
+   
+      return sum * 2048 / (3300 * n);
+   }
+#else
    return max1139Read(channel/12, channel % 12);
+#endif
 }
 
 static int daclookup[DOM_HAL_NUM_DAC_CHANNELS];
@@ -1010,6 +1035,11 @@ static unsigned char adcCLKHigh(void) {
    return PLDBIT(SPI_CTRL, DAC_CL)|PLDBIT(SPI_CTRL, SERIAL_CLK); 
 }
 
+
+/* 1/2 period of the clock for 1139 chip 4us = 250KHz...
+ */
+#define TCLK1139  (4/2)
+
 /* i2c start condition...
  *
  * no assumptions about clock
@@ -1020,15 +1050,15 @@ static void startMax1139(int cs) {
    /* both high... */
    PLD(SPI_CHIP_SELECT0) = adcCSHigh(cs);
    PLD(SPI_CTRL) = adcCLKHigh();
-   waitus(1);
+   waitus(TCLK1139);
    
    /* drop data... */
    PLD(SPI_CHIP_SELECT0) = adcCSLow(cs);
-   waitus(1);
+   waitus(TCLK1139);
 
    /* drop clock... */
    PLD(SPI_CTRL) = adcCLKLow();
-   waitus(1);
+   waitus(TCLK1139);
 }
 
 /* i2c stop condition...
@@ -1041,17 +1071,17 @@ static void stopMax1139(int cs) {
    /* data goes low...
     */
    PLD(SPI_CHIP_SELECT0) = adcCSLow(cs);
-   waitus(1);
+   waitus(TCLK1139);
 
    /* now clock goes high...
     */
    PLD(SPI_CTRL) = adcCLKHigh();
-   waitus(1);
+   waitus(TCLK1139);
 
    /* now raise data to signal stop...
     */
    PLD(SPI_CHIP_SELECT0) = adcCSHigh(cs);
-   waitus(1);
+   waitus(TCLK1139);
 }
 
 /* i2c routines...
@@ -1073,19 +1103,19 @@ static void writeMax1139Byte(int cs, int val) {
        */
       PLD(SPI_CHIP_SELECT0) = bit;
       PLD(SPI_CTRL) = adcCLKHigh();
-      waitus(1);
+      waitus(TCLK1139);
 
       /* drop the clock and wait...
        */
       PLD(SPI_CTRL) = adcCLKLow();
-      waitus(1);
+      waitus(TCLK1139);
    }
 
    /* get ack, drop clock, wait, raise clock, wait, sample...
     */
    PLD(SPI_CHIP_SELECT0) = adcCSHigh(cs);
    PLD(SPI_CTRL) = adcCLKHigh();
-   waitus(1);
+   waitus(TCLK1139);
    
    ack = PLD(SPI_CHIP_SELECT0) & (1<<(cs+5));
 
@@ -1095,7 +1125,7 @@ static void writeMax1139Byte(int cs, int val) {
     */
 
    PLD(SPI_CTRL) = adcCLKLow();
-   waitus(1);
+   waitus(TCLK1139);
 }
 
 /* assume clock is low on entry
@@ -1113,14 +1143,14 @@ static int readMax1139Byte(int cs, int ack) {
    for (i=0; i<8; i++) {
       /* raise clock... */
       PLD(SPI_CTRL) = adcCLKHigh();
-      waitus(1);
+      waitus(TCLK1139);
       
       /* read data... */
       val = (val<<1) | ( (PLD(SPI_CHIP_SELECT0) & (1<<(cs+5))) ? 1 : 0 );
 
       /* drop clock... */
       PLD(SPI_CTRL) = adcCLKLow();
-      waitus(1);
+      waitus(TCLK1139);
    }
    
    /* send nack...
@@ -1129,10 +1159,10 @@ static int readMax1139Byte(int cs, int ack) {
    else PLD(SPI_CHIP_SELECT0) = adcCSLow(cs);
 
    PLD(SPI_CTRL) = adcCLKHigh();
-   waitus(1);
+   waitus(TCLK1139);
 
    PLD(SPI_CTRL) = adcCLKLow();
-   waitus(1);
+   waitus(TCLK1139);
 
    return val;
 }
@@ -1143,7 +1173,13 @@ static int max1139Read(int cs, int ch) {
    /* set channel to readout... */
    startMax1139(cs);
    writeMax1139Byte(cs, 0x6a); /* 0110 1010 */
+
+#if defined(USE_VREF_3_3)
+   writeMax1139Byte(cs, 0x88); /* 1000 1000 -- */
+#else
    writeMax1139Byte(cs, 0xD8); /* 1101 1000 */
+#endif
+
    writeMax1139Byte(cs, (ch<<1) | 0x61); /* 0110 0000 */
    stopMax1139(cs);
 
