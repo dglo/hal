@@ -1,9 +1,9 @@
 /**
  * \file fb-hal.c
  *
- * $Revision: 1.4 $
+ * $Revision: 1.4.6.1 $
  * $Author: jkelley $
- * $Date: 2004-04-29 21:03:01 $
+ * $Date: 2004-08-27 02:20:23 $
  *
  * The DOM flasher board HAL.
  *
@@ -80,15 +80,6 @@ const char * hal_FB_get_serial(void) {
     if (read == FALSE) {
         memset(t, 0, sz);
 
-        /* Make sure we start in normal mode */
-        /* There is funniness with state machine right after reset */
-        FB(MODE_SELECT) = 0x0;
-        halUSleep(5000);
-    
-        /* Put the CPLD in one-wire mode */
-        FB(MODE_SELECT) = 0x2;
-        halUSleep(5000);
-
         /* Reset one-wire */
         FB(ONE_WIRE) = 0xf;
         waitOneWireBusy();
@@ -110,10 +101,6 @@ const char * hal_FB_get_serial(void) {
         
         for (i=0; i<64/4; i++) t[i] = hexdigit[(int)t[i]];
         
-        /* Put the CPLD back in normal mode */
-        FB(MODE_SELECT) = 0x0;
-        halUSleep(5000);
-
         read = TRUE;
     }
     return t;
@@ -186,22 +173,9 @@ static void max5438Write(int val) {
  * on the flasher board.
  */
 void hal_FB_set_brightness(UBYTE value) {
-
-    /* Make sure we start in normal mode */
-    /* There is funniness with state machine */
-    FB(MODE_SELECT) = 0x0;
-    halUSleep(5000);
-
-    /* Put the CPLD in SPI mode */
-    FB(MODE_SELECT) = 0x1;
-    halUSleep(5000);
-
-    /* Write the value */
-    max5438Write(value);
-
-    /* Put the CPLD back in normal mode */
-    FB(MODE_SELECT) = 0x0;
     
+    FB(SPI_CTRL) = value;
+    halUSleep(10000);
 }
 
 /**
