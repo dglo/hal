@@ -4,7 +4,7 @@
 #include "hal/DOM_MB_hal.h"
 #include "hal/DOM_PLD_regs.h"
 
-#include "../../../../epxa10/build/dom-loader/epxa.h"
+#include "booter/epxa.h"
 
 static void max5250Write(int chan, int val);
 static void max525Write(int chan, int val);
@@ -21,7 +21,9 @@ static int readDS1631Config(void);
 static void convertDS1631(void);
 static int readDS1631Temp(void);
 static void waitus(int us);
-
+static void writeLTC1257(int val);
+static void writeLTC1451(int val);
+static int readLTC1286(void);
 
 BOOLEAN halIsSimulationPlatform() { return 0; }
 USHORT halGetHalVersion() { return DOM_HAL_VERSION; }
@@ -42,6 +44,8 @@ void halClrFlashBoot() {
 BOOLEAN halFlashBootState() { 
    return RPLDBIT(BOOT_STATUS, BOOT_FROM_FLASH)!=0;
 }
+
+USHORT halReadBaseADC(void) { return readLTC1286(); }
 
 USHORT halReadADC(UBYTE channel) {
    int ret;
@@ -91,6 +95,22 @@ void halWriteDAC(UBYTE channel, USHORT value) {
 
    
    PLD(SPI_CHIP_SELECT0) = ~0;
+}
+
+static USHORT baseDAC = 0;
+
+void halWriteActiveBaseDAC(USHORT value) {
+   writeLTC1257(value);
+   baseDAC = value;
+}
+
+void halWritePassiveBaseDAC(USHORT value) {
+   writeLTC1451(value);
+   baseDAC = value;
+}
+
+USHORT halReadBaseDAC(void) {
+   return baseDAC;
 }
 
 USHORT halReadDAC(UBYTE channel) {
@@ -433,41 +453,6 @@ static void max534Write(int chan, int val) {
    writeSPI( ((chan&3)<<10) | (0x3<<8) | (val&0xff), 12);
 }
 
-static void ltc1257Write(int chan, int val) {
-   writeSPI(val&0xfff, 12);
-   /* FIXME: pull nload down...
-    */
-}
-
-/* shift out an adc word
- */
-static void shiftOutADC(int val, int bits) {
-   int mask;
-   for (mask=(1<<(bits-1)); mask>0; mask>>=1) {
-      int bit = (val&mask) ? PLDBIT(SPI_CTRL, MOSI_DATA0) : 0;
-      PLD(SPI_CTRL) = PLDBIT(SPI_CTRL, SERIAL_CLK) | bit;
-      waitus(1);
-      PLD(SPI_CTRL) = bit;
-      waitus(1);
-   }
-}
-
-/* shift in an adc word...
- */
-static int shiftInADC(int bits) {
-   int i, val = 0;
-   for (i=0; i<bits; i++) {
-      int bit;
-      PLD(SPI_CTRL) = PLDBIT(SPI_CTRL, SERIAL_CLK);
-      waitus(1);
-      PLD(SPI_CTRL) = 0;
-      waitus(1);
-      bit = RPLDBIT(I2C_DATA0, ADC0_DATA) ? 1 : 0;
-      val = (val<<1)|bit;
-   }
-   return 0;
-}
-
 /* read from max146...
  *
  * 8 channel 12-bit ADC
@@ -488,12 +473,6 @@ static int max146Read(int chan) {
    return readSPI(16, PLDBIT(SPI_READ_DATA, MISO_DATA_SC))>>4; 
 }
 
-/* 2 channel 12-bit ADC
- */
-static int ltc1286(int chan) {
-   return shiftInADC(24)>>12;
-}
-
 /* i2c start condition...
  *
  * no assumptions about clock
@@ -511,12 +490,12 @@ static void startI2C(void) {
       PLDBIT(SPI_CHIP_SELECT1, BASE_CS0) | PLDBIT(SPI_CHIP_SELECT1, BASE_CS1) |
       PLDBIT(SPI_CHIP_SELECT1, FLASHER_CS0);
 
-   PLD(SPI_CHIP_SELECT1) = dreg | PLDBIT(SPI_CHIP_SELECT1, TEMP_SENSOR_DATA);
+   PLD(I2C_CONTROL1) = dreg | PLDBIT(I2C_CONTROL1, TEMP_SENSOR_DATA);
    PLD(SPI_CTRL) = creg | PLDBIT(SPI_CTRL, TEMP_SENSOR_CLK);
    waitus(2);
    
    /* drop data... */
-   PLD(SPI_CHIP_SELECT1) = dreg;
+   PLD(I2C_CONTROL1) = dreg;
    waitus(2);
 
    /* drop clock... */
@@ -694,5 +673,99 @@ static int readDS1631Temp(void) {
    ret = (ret<<8) | readI2CByte(1); /* data */
    stopI2C();
    return ret;
+}
+
+/* send a up to 32 bit value to the serial port...
+ * assume chips can handle 1MHz
+ */
+static void writeBase(int val, int bits, int csmask) {
+   int mask;
+   const int reg = PLDBIT(SPI_CTRL, DAC_CL);
+
+   for (mask=(1<<(bits-1)); mask>0; mask>>=1) {
+      const int dr = reg | ((val&mask) ? PLDBIT(SPI_CTRL, BASE_MOSI) : 0);
+
+      /* set data bit, clock low...
+       */
+      PLD(SPI_CTRL) = dr;
+      waitus(1);
+
+      /* clock it in...
+       */
+      PLD(SPI_CTRL) = dr | PLDBIT(SPI_CTRL, SERIAL_CLK);
+      waitus(1);
+
+      if (mask==1) {
+	 /* on the last bit, load* gets asserted...
+	  */
+	 PLD(SPI_CHIP_SELECT1) = csmask;
+	 waitus(1);
+      }
+   }
+   PLD(SPI_CTRL) = reg;
+   waitus(1);
+}
+
+static void writeLTC1257(int val) {
+   PLD(SPI_CHIP_SELECT1) = PLDBIT2(SPI_CHIP_SELECT1, BASE_CS0, BASE_CS1);
+   writeBase(val, 12, PLDBIT(SPI_CHIP_SELECT1, BASE_CS1));
+   PLD(SPI_CHIP_SELECT1) = PLDBIT2(SPI_CHIP_SELECT1, BASE_CS0, BASE_CS1);
+}
+
+static void writeLTC1451(int val) {
+   const int reg = PLDBIT(SPI_CTRL, DAC_CL);
+
+   /* start with clock low... */
+   PLD(SPI_CTRL) = reg;
+   waitus(1);
+
+   /* raise clock and cs */
+   PLD(SPI_CTRL) = reg | PLDBIT(SPI_CTRL, SERIAL_CLK);
+   PLD(SPI_CHIP_SELECT1) = PLDBIT2(SPI_CHIP_SELECT1, BASE_CS1, BASE_CS0);
+   waitus(1);
+
+   /* drop clock */
+   PLD(SPI_CTRL) = reg;
+   waitus(1);
+
+   /* drop chip select */
+   PLD(SPI_CHIP_SELECT1) = PLDBIT(SPI_CHIP_SELECT1, BASE_CS1);
+   waitus(1);
+   
+   /* start clocking data... */
+   writeBase(val, 12, PLDBIT2(SPI_CHIP_SELECT1, BASE_CS0, BASE_CS1));
+
+   /* drop cs again... */
+   PLD(SPI_CHIP_SELECT1) = PLDBIT(SPI_CHIP_SELECT1, BASE_CS1);
+}
+
+static int readLTC1286(void) {
+   const int reg = PLDBIT(SPI_CTRL, DAC_CL);
+   int ret;
+
+   /* cs high...
+    */
+   PLD(SPI_CHIP_SELECT1) = PLDBIT2(SPI_CHIP_SELECT1, BASE_CS0, BASE_CS1);
+   
+   /* clock low...
+    */
+   PLD(SPI_CTRL) = reg;
+   waitus(1);
+
+   /* cs low...
+    */
+   PLD(SPI_CHIP_SELECT1) = PLDBIT(SPI_CHIP_SELECT1, BASE_CS0);
+   waitus(1);
+
+   /* read out results...
+    */
+   ret = readSPI(14, PLDBIT(SPI_READ_DATA, MISO_DATA_BASE));
+
+   /* chip select goes high again...
+    */
+   PLD(SPI_CHIP_SELECT1) = PLDBIT2(SPI_CHIP_SELECT1, BASE_CS0, BASE_CS1);
+
+   /* we only use bottom 12 bits... */
+   return ret&0x0fff;
 }
 

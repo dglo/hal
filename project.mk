@@ -1,5 +1,5 @@
 C_BIN_NAMES :=
-USES_PROJECTS :=
+USES_PROJECTS := dom-loader
 USES_TOOLS :=
 
-include ../resources/standard.mk
+include ../tools/resources/standard.mk

@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_pld.h
  *
- * $Revision: 1.9 $
+ * $Revision: 1.11 $
  * $Author: arthur $
- * $Date: 2003-04-09 22:15:43 $
+ * $Date: 2003-05-02 02:26:01 $
  *
  * \b Usage:
  * \code
@@ -178,6 +178,16 @@ USHORT
 halReadADC(UBYTE channel);
 
 /**
+ * This routine reads and returns an ADC value for the PMT high
+ * voltage base.
+ * Hal simulation libraries are free to return any value 
+ * and may attempt to return "reasonable" values based on expected DOM MB 
+ * operation.
+ */
+USHORT
+halReadBaseADC(void);
+
+/**
  * This routine writes a value into the DAC channel specified.  Attempts to 
  * write values outside the maximum supported by the addressed DAC will 
  * result in maximum permissible value being written to the selected DAC 
@@ -196,6 +206,32 @@ void
 halWriteDAC(UBYTE channel, USHORT value);
 
 /**
+ * This routine writes a value into the High Voltage Base DAC channel 
+ * specified.  Attempts to 
+ * write values outside the maximum supported by the addressed DAC will 
+ * result in maximum permissible value being written to the selected DAC 
+ * channel.
+ *
+ * \param value   value to write to DAC
+ * \see halReadBaseDAC
+ */
+void
+halWriteActiveBaseDAC(USHORT value);
+
+/**
+ * This routine writes a value into the High Voltage Base DAC channel 
+ * specified.  Attempts to 
+ * write values outside the maximum supported by the addressed DAC will 
+ * result in maximum permissible value being written to the selected DAC 
+ * channel.
+ *
+ * \param value   value to write to DAC
+ * \see halReadBaseDAC
+ */
+void
+halWritePassiveBaseDAC(USHORT value);
+
+/**
  * This routine returns the last value written to the specified DAC channel.  
  * Since no DACs support read back of set values, the returned value comes 
  * from local storage within the hal library.
@@ -208,6 +244,17 @@ halWriteDAC(UBYTE channel, USHORT value);
  */
 USHORT
 halReadDAC(UBYTE channel);
+
+/**
+ * This routine returns the last value written to the high voltage
+ * PMT base DAC.
+ * Since no DACs support read back of set values, the returned value comes 
+ * from local storage within the hal library.
+ *
+ * \see halWriteBaseDAC
+ */
+USHORT
+halReadBaseDAC(void);
 
 /**
  * This routine applies power to the analog barometer sensor located on the 

@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_fpga.h
  *
- * $Revision: 1.4 $
- * $Author: arthur $
- * $Date: 2003-04-07 20:57:29 $
+ * $Revision: 1.8 $
+ * $Author: mcp $
+ * $Date: 2003-05-15 00:05:11 $
  *
  * \b Usage:
  * \code
@@ -19,7 +19,18 @@
 #include "hal/DOM_MB_types.h"
 
 /**
- * readout the atwd
+ * readout the atwd, wait for a readout to be done.
+ *
+ * \param chip chip 0 or 1
+ *
+ * \return non-zero if chip is done with readout
+ * \see hal_FPGA_TEST_atwd_readout_done
+ */
+BOOLEAN
+hal_FPGA_TEST_atwd_readout_done(int chip);
+
+/**
+ * readout the atwd, wait for a readout to be done.
  *
  * \param buffer buffer to be filled
  * \param max max number of words to write
@@ -27,7 +38,7 @@
  * \param channel channel 0-3
  *
  * \return number of shorts read
- *
+ * \see hal_FPGA_TEST_atwd_readout_done
  */
 int
 hal_FPGA_TEST_atwd_readout(short *buffer, int max, int chip, int channel);
@@ -82,15 +93,34 @@ hal_FPGA_TEST_atwd_trigger_forced(int chip);
 void
 hal_FPGA_TEST_atwd_trigger_disc(int chip);
 
+/**
+ * send a message over twisted pair communications channel
+ *
+ * \param type message type
+ * \param len message length
+ * \param msg is the message to send
+ */
+int
+hal_FPGA_TEST_send(int type, int len, const char *msg);
 
+/**
+ * receive a message over twister pair communications channel
+ *
+ * \param type message type
+ * \param len message length
+ * \param msg preallocated buffer at least 4096 bytes long.
+ */
+
+int
+hal_FPGA_TEST_receive(int *type, int *len, char *msg);
+
+/**
+ * read DOM MB clock and return value
+ * 
+ * \return long long value of clock
+ */
+long long hal_FPGA_getClock();
 #endif
-
-
-
-
-
-
-
 
 
 

@@ -218,11 +218,26 @@
  *
  * \brief We use the low 16 bits of this register to write the current
  * master test address (debug only).  We use bits 16-19 of this register
- * to write the front end pulser rate...
+ * to write the front end pulser rate.  Bits 24-31 are used for the
+ * flasher board interface...
  */
 /*@{*/
 /** register addresss */
 #define DOM_FPGA_TEST_AHB_MASTER_TEST (DOM_FPGA_TEST_BASE + 0x1028)
+/** Trigger the flasher, assuming the capacitor is charged */
+#define DOM_FPGA_TEST_AHB_MASTER_TEST_FL_TRIGGER     0x01000000
+/** Flasher attention, interrupt request. */
+#define DOM_FPGA_TEST_AHB_MASTER_TEST_FL_ATTN        0x02000000
+/** Pretrigger, start charging the capacitor... */
+#define DOM_FPGA_TEST_AHB_MASTER_TEST_FL_PRE_TRIGGER 0x04000000
+/** JTAG tms */
+#define DOM_FPGA_TEST_AHB_MASTER_TEST_FL_TMS         0x10000000
+/** JTAG tck */
+#define DOM_FPGA_TEST_AHB_MASTER_TEST_FL_TCK         0x20000000
+/** JTAG tdi */
+#define DOM_FPGA_TEST_AHB_MASTER_TEST_FL_TDI         0x40000000
+/** JTAG tdo */
+#define DOM_FPGA_TEST_AHB_MASTER_TEST_FL_TDO         0x80000000
 
 /**
  * pulser rate values for bits 16-19...
@@ -245,6 +260,72 @@ enum DOMPulserRates {
    /** ~.6kHz */
    DOMPulserRate_6k   = 0x70000
 };
+/*@}*/
+
+/**
+ * \defgroup fpga_test_com_ctrl Communications control
+ * \ingroup fpga_test_regs
+ *
+ * \brief This register contains control for the
+ * dom communications channel.
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_COM_CTRL (DOM_FPGA_TEST_BASE + 0x1030)
+/** Signal that we're done reading a message from the Rx Fifo */
+#define DOM_FPGA_TEST_COM_CTRL_RX_DONE     0x00000001
+/*@}*/
+
+/**
+ * \defgroup fpga_test_com_status Communications status
+ * \ingroup fpga_test_regs
+ *
+ * \brief This register contains status information for the
+ * dom communications channel.
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_COM_STATUS (DOM_FPGA_TEST_BASE + 0x1034)
+/** Is there a message waiting on the Rx */
+#define DOM_FPGA_TEST_COM_STATUS_RX_MSG_READY     0x00000001
+/** for debugging hardware... */
+#define DOM_FPGA_TEST_COM_STATUS_RX_READ_EMPTY    0x00000002
+/** for debugging hardware... */
+#define DOM_FPGA_TEST_COM_STATUS_RX_WRITE_ALMOST_FULL    0x00000040
+/** for debugging hardware... */
+#define DOM_FPGA_TEST_COM_STATUS_RX_WRITE_FULL    0x00000080
+/** for debugging hardware... */
+#define DOM_FPGA_TEST_COM_STATUS_RX_MSG_COUNT_MASK    0x0000ff00
+/** The transmit fifo is almost empty */
+#define DOM_FPGA_TEST_COM_STATUS_TX_FIFO_ALMOST_EMPTY 0x00010000
+/** The transmit fifo is almost full */
+#define DOM_FPGA_TEST_COM_STATUS_TX_FIFO_ALMOST_FULL  0x00020000
+/** for debugging hardware... */
+#define DOM_FPGA_TEST_COM_STATUS_TX_READ_EMPTY  0x00100000
+/*@}*/
+
+/**
+ * \defgroup fpga_test_com_tx_data Communications transmit data
+ * \ingroup fpga_test_regs
+ *
+ * \brief This register contains the fifo transmit data going to the
+ * dom communications channel.
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_COM_TX_DATA (DOM_FPGA_TEST_BASE + 0x1038)
+/*@}*/
+
+/**
+ * \defgroup fpga_test_com_rx_data Communications receive data
+ * \ingroup fpga_test_regs
+ *
+ * \brief This register contains the fifo receive data from the
+ * dom communications channel.
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_COM_RX_DATA (DOM_FPGA_TEST_BASE + 0x103C)
 /*@}*/
 
 /**
@@ -320,3 +401,4 @@ enum DOMPulserRates {
 #define RFPGABIT2(a, b, c) ( FPGA(a) & (FPGABIT(a, b) | FPGABIT(a, c)) )
 #define RFPGABIT3(a, b, c, d) ( FPGA(a) & \
   (FPGABIT(a, b) | FPGABIT(a, c) | FPGABIT(a, d)) )
+

@@ -1,4 +1,4 @@
-/** 
+ /*
  *
  * \mainpage DOM Main Board Hardware Access Library (HAL) Interface
  * \section scope Scope
@@ -66,9 +66,9 @@
 /**
  * \file DOM_MB_hal.h
  *
- * $Revision: 1.1 $
- * $Author: mcp $
- * $Date: 2003-03-04 02:21:33 $
+ * $Revision: 1.3 $
+ * $Author: patton $
+ * $Date: 2003-05-09 18:06:10 $
  *
  * \b Usage:
  * \code
@@ -78,6 +78,13 @@
  * DOM main board hardware access library interface
  *
  */
+
+// defined here, but should be included in DOM_MB_types.h once
+// we can coordinate with real hal implementation
+#define TRUE 1
+#define FALSE 0
+
+#include <pthread.h>
 #include "hal/DOM_MB_types.h"
 #include "hal/DOM_MB_pld_simul.h"
 #include "hal/DOM_MB_fpga_simul.h"

@@ -31,6 +31,11 @@ typedef unsigned short USHORT;
 /**
  * \brief for convenience...
  */
+typedef unsigned long ULONG;
+
+/**
+ * \brief for convenience...
+ */
 typedef unsigned char UBYTE;
    
 

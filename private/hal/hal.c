@@ -1,10 +1,22 @@
-/**
+/*
  * \file emu.c, emulate the dom hal.  Should be useful for
  * both the eval board and a standalone emulation dom mb 
  * emulation program
  */
-//#include <stdio.h>
+#include <unistd.h>
+#include <time.h>
 #include "hal/DOM_MB_hal_simul.h"
+
+// define true and false
+#define TRUE 1
+#define FALSE 0
+
+// storage for DACs and ADCs. used for simulation
+static USHORT DAC[DOM_HAL_NUM_DAC_CHANNELS]={0,0,0,0,0,0,0,0};
+static USHORT ADC[DOM_HAL_NUM_ADC_CHANNELS]={0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0};
+static USHORT PMT_HV=0;
+static BOOLEAN PMT_HV_ENABLE=FALSE;
 
 BOOLEAN halIsSimulationPlatform() { return 1; }
 USHORT halGetHalVersion() { return 1; }
@@ -16,30 +28,36 @@ void halSetFlashBoot() { flashboot = 1; }
 void halClrFlashBoot() { flashboot = 0; }
 
 BOOLEAN halFlashBootState() { return flashboot; }
-USHORT halReadADC(UBYTE channel) { return 1234; }
 
-static USHORT daclookup[DOM_HAL_NUM_DAC_CHANNELS];
+USHORT halReadADC(UBYTE channel) { 
+    if(channel >= DOM_HAL_NUM_ADC_CHANNELS) return;
+    return ADC[channel]; 
+}
+
 void halWriteDAC(UBYTE channel, USHORT value) {
    if (channel>=DOM_HAL_NUM_DAC_CHANNELS) return;
-   daclookup[channel] = value;
+   DAC[channel] = value&0xfff;
 }
 
 USHORT halReadDAC(UBYTE channel) {
    if (channel>=DOM_HAL_NUM_DAC_CHANNELS) return 0;
-   return daclookup[channel];
+   return DAC[channel];
 }
 
 void halEnableBarometer() {;}
 void halDisableBarometer() {;}
 USHORT halReadTemp() { return 100; }
 
-void halEnablePMT_HV() { ; }
-void halDisablePMT_HV() { ; }
+void halEnablePMT_HV() { PMT_HV_ENABLE=TRUE; }
+void halDisablePMT_HV() { PMT_HV_ENABLE=FALSE; }
+BOOLEAN halPMT_HVisEnabled() {return PMT_HV_ENABLE; }
 
-static USHORT pmtlookup;
-
-void halSetPMT_HV(USHORT value) { pmtlookup = value; }
-USHORT halReadPMT_HV() { return pmtlookup; }
+void halSetPMT_HV(USHORT value) { PMT_HV = value&0xfff; }
+void halWriteActiveBaseDAC(USHORT value) { PMT_HV = value&0xfff; }
+void halWritePassiveBaseDAC(USHORT value) { PMT_HV = value&0xfff; }
+USHORT halReadPMT_HV() { return PMT_HV; }
+USHORT halReadBaseADC(void) { return PMT_HV;}
+USHORT halReadBaseDAC(void) { return PMT_HV;}
 
 static UBYTE muxlookup;
 
@@ -149,19 +167,220 @@ char boardName[128]="none";
 char *halGetBoardName(void) {return boardName; }
 void halSetBoardName(char *name) { strcpy(boardName,name);}
 
+void halUSleep(int us) { usleep(us); }
+
+UBYTE *bufferBaseAddr;
+int bufferMask;
+pthread_mutex_t *FPGAsimulMutex;
+int readoutState;
+ULONG readoutIndex;
+BOOLEAN readoutEnabled;
+int readoutMode;
+
+void
+halInitReadoutIface(UBYTE *base, int mask) {
+    // get the simulation lock
+    pthread_mutex_lock(FPGAsimulMutex);
+
+    bufferBaseAddr = base;
+    bufferMask = mask;
+    readoutState = READOUT_STATE_STOPPED;
+    readoutIndex = 0;
+    readoutEnabled = FALSE;
+
+    // release it
+    pthread_mutex_unlock(FPGAsimulMutex);
+}
+
+void
+halSimulInitReadoutIface(pthread_mutex_t *mutex) {
+    FPGAsimulMutex=mutex;
+}
+
+void
+halResetReadoutIface(void) {
+    // get the simulation lock
+    pthread_mutex_lock(FPGAsimulMutex);
+
+    readoutIndex = 0;
+    //printf("halResetReadoutIface: \nbase: %x\nlen: %d\nnumBuf: %d\n",
+	//bufferBaseAddr, bufferByteLen, numReadoutBuffers);
+    //printf("state: %d, \nindex: %d, \nenabled: %d\n",
+	//readoutState, readoutIndex, readoutEnabled);
+
+    // release it
+    pthread_mutex_unlock(FPGAsimulMutex);
+}
+
+int
+halGetBufferElementLen(void) {
+    return BUFFER_ELEMENT_LEN;
+}
+
+//int
+//halGetBufferMask(void) {
+//    return bufferMask;
+//}
+
+ULONG
+halGetReadoutIndex(void) {
+    ULONG temp;
+
+    // get the simulation lock
+    pthread_mutex_lock(FPGAsimulMutex);
+
+    temp = readoutIndex & bufferMask;
+
+    // release it
+    pthread_mutex_unlock(FPGAsimulMutex);
+
+    return temp;
+}
+
+ULONG
+halGetReadoutEventIndex(void) {
+    ULONG temp;
+
+    // get the simulation lock
+    pthread_mutex_lock(FPGAsimulMutex);
+
+    temp = readoutIndex;
+
+    // release it
+    pthread_mutex_unlock(FPGAsimulMutex);
+
+    return temp;
+}
+
+void
+halDisableReadoutIface(void) {
+    // get the simulation lock
+    pthread_mutex_lock(FPGAsimulMutex);
+
+    readoutEnabled = FALSE;
+
+    // release it
+    pthread_mutex_unlock(FPGAsimulMutex);
+}
+
+void
+halEnableReadoutIface(void) {
+    // get the simulation lock
+    pthread_mutex_lock(FPGAsimulMutex);
+
+    readoutEnabled = TRUE;
+    readoutState = READOUT_STATE_RUNNING;
+
+    // release it
+    pthread_mutex_unlock(FPGAsimulMutex);
+}
+
+BOOLEAN
+halIsReadoutIfaceEnabled(void) {
+    return readoutEnabled;
+}
+
+void
+halSetReadoutIfaceFillOnce(void) {
+    // get the simulation lock
+    pthread_mutex_lock(FPGAsimulMutex);
+
+    readoutMode = READOUT_FILL_ONCE;
+
+    // release it
+    pthread_mutex_unlock(FPGAsimulMutex);
+}
+
+void
+halSetReadoutIfaceWrap(void) {
+    // get the simulation lock
+    pthread_mutex_lock(FPGAsimulMutex);
+
+    readoutMode = READOUT_WRAP;
+
+    // release it
+    pthread_mutex_unlock(FPGAsimulMutex);
+}
+
+int
+halGetReadoutIfaceState(void) {
+    return readoutState;
+}
+
+void
+halResumeReadoutIface(void) {
+    // get the simulation lock
+    pthread_mutex_lock(FPGAsimulMutex);
+
+    if(readoutState == READOUT_STATE_PAUSED) {
+	readoutState = READOUT_STATE_RUNNING;
+    }
+
+    // release it
+    pthread_mutex_unlock(FPGAsimulMutex);
+}
 
 
+UBYTE *
+halSimulGetCurReadoutIfaceAddr(void) {
+    UBYTE *temp;
 
+    // get the simulation lock
+    pthread_mutex_lock(FPGAsimulMutex);
 
+    temp = bufferBaseAddr + (BUFFER_ELEMENT_LEN * 
+	(readoutIndex & bufferMask));
 
+    // release it
+    pthread_mutex_unlock(FPGAsimulMutex);
 
+    return temp;
+}
 
+UBYTE *
+halGetReadoutIfaceAddr(ULONG index) {
+    return bufferBaseAddr + (BUFFER_ELEMENT_LEN *
+	(index & bufferMask));
+}
 
+void
+halSimulIncReadoutIndex(void) {
+    // get the simulation lock
+    pthread_mutex_lock(FPGAsimulMutex);
 
+    // only act if we are enabled
+    if(readoutEnabled) {
+	// only act if we are running
+	if(readoutState == READOUT_STATE_RUNNING) {
+	    readoutIndex++;
+	    // check for wrap around
+	    if((readoutIndex & bufferMask) == 0) {
+		readoutIndex &= ~bufferMask;
+		// pause if in fill once mode
+		if(readoutMode == READOUT_FILL_ONCE) {
+		    readoutState = READOUT_STATE_PAUSED;
+		}
+	    }
+	}
+	if(readoutMode == READOUT_FILL_ONCE) {
+	    readoutState = READOUT_STATE_PAUSED;
+	}
+    }
 
+    // release it
+    pthread_mutex_unlock(FPGAsimulMutex);
+}
 
+int
+hal_FPGA_TEST_send(int type, int len, const char *msg) {
+    return 1;
+}
 
+int
+hal_FPGA_TEST_receive(int *type, int *len, char *msg) {
+    return 1;
+}
 
-
-
-
+long long hal_FPGA_getClock() {
+    return (long long)time(NULL);
+}

@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_pld.h
  *
- * $Revision: 1.1 $
+ * $Revision: 1.2 $
  * $Author: mcp $
- * $Date: 2003-03-04 02:21:33 $
+ * $Date: 2003-03-14 02:06:02 $
  *
  * \b Usage:
  * \code
@@ -418,19 +418,14 @@ char *
 halGetBoardName();
 
 /**
- * number of dom dac chip select lines...
- */
-#define DOM_HAL_NUM_DAC_CS 5
-
-/**
  * number of dom dac channels
  */
-#define DOM_HAL_NUM_DAC_CHANNELS (DOM_HAL_NUM_DAC_CS * 4)
+#define DOM_HAL_NUM_DAC_CHANNELS 8
 
 /**
  * number of dom adc (slow) channels
  */
-#define DOM_HAL_NUM_ADC_CHANNELS 2
+#define DOM_HAL_NUM_ADC_CHANNELS 16
 
 /**
  * current version number of this library...
