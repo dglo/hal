@@ -1,9 +1,9 @@
 /**
  * \file fb-hal.c
  *
- * $Revision: 1.4.6.1 $
- * $Author: jkelley $
- * $Date: 2004-08-27 02:20:23 $
+ * $Revision: 1.4.6.2 $
+ * $Author: arthur $
+ * $Date: 2004-10-01 17:12:58 $
  *
  * The DOM flasher board HAL.
  *
@@ -23,30 +23,32 @@ void hal_FB_enable(void) {
 
     /* Enable the flasherboard interface in the mainboard CPLD */
     halEnableFlasher();
-    halUSleep(5000);
+    halUSleep(100000);
 
     /* Reset the flasherboard CPLD */
+    /* A reasonable wait here is important -- reset times at */
+    /* low temperatures seem to get quite a bit longer */
     FB(RESET) = 0x1;
-    halUSleep(5000);
+    halUSleep(100000);
 
     /* Make sure all LEDs are off */
     hal_FB_enable_LEDs(0);
 
     /* Power on the DC-DC converter */
     FB(DCDC_CTRL) = 0x1;   
-    halUSleep(5000);
+    halUSleep(100000);
 
     /* Initialize mux selects (turn off mux as default) */
     hal_FB_select_mux_input(DOM_FB_MUX_DISABLE);
-
-    /* Turn off all LEDs */
-    hal_FB_enable_LEDs(0);
+    halUSleep(5000);
 
     /* Initialize pulse width to zero */
     hal_FB_set_pulse_width(0);
+    halUSleep(5000);
 
     /* Enable delay chip */
     FB(LE_DP) = 0x1;
+    halUSleep(5000);
 }
 
 void hal_FB_disable(void) {
