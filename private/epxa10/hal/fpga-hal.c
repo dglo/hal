@@ -122,7 +122,18 @@ int hal_FPGA_TEST_send(int type, int len, const char *msg) {
       return 1;
    }
    
+   /* wait for comm to become avail... */
+   while (!RFPGABIT(TEST_COM_STATUS, AVAIL)) {
+      halUSleep(1);
+      cnt++;
+      if (cnt==1000000) {
+	 printf("send: com avail timeount!\r\n");
+	 return 1;
+      }
+   }
+
    /* wait for Tx fifo almost full to be low */
+   cnt = 0;
    while (RFPGABIT(TEST_COM_STATUS, TX_FIFO_ALMOST_FULL)) {
       halUSleep(1);
       cnt++;
@@ -308,7 +319,3 @@ void hal_FPGA_TEST_request_reboot(void) {
 int  hal_FPGA_TEST_is_reboot_granted(void) {
    return RFPGABIT(TEST_COM_STATUS, REBOOT_GRANTED)!=0;
 }
-
-
-
-
