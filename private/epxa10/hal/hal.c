@@ -495,7 +495,7 @@ static void writeSPI(int val, int bits) {
    PLD(SPI_CTRL) = reg;
 }
 
-/* read up to 32 bit value from the spi, assume chips can handle 1MHz
+/* read up to 32 bit value from the spi, assume chips can handle 166KHz
  *
  * data is read after falling edge...
  */
@@ -505,14 +505,14 @@ static int readSPI(int bits, int msk) {
    int ret = 0;
 
    PLD(SPI_CTRL) = reg;
-   waitus(1);
+   waitus(3);
    
    for (mask=(1<<(bits-1)); mask>0; mask>>=1) {
       PLD(SPI_CTRL) = reg | PLDBIT(SPI_CTRL, SERIAL_CLK);
-      waitus(1);
+      waitus(3);
       
       PLD(SPI_CTRL) = reg;
-      waitus(1);
+      waitus(3);
 
       ret = (ret<<1) | ((PLD(SPI_READ_DATA) & msk) ? 1 : 0);
    }
@@ -851,20 +851,22 @@ static int readLTC1286(void) {
    /* clock low...
     */
    PLD(SPI_CTRL) = reg;
-   waitus(1);
+   waitus(3);
 
    /* cs low...
     */
    PLD(SPI_CHIP_SELECT1) = PLDBIT(SPI_CHIP_SELECT1, BASE_CS0);
-   waitus(1);
+   waitus(3);
 
    /* read out results...
     */
    ret = readSPI(14, PLDBIT(SPI_READ_DATA, MISO_DATA_BASE));
+   waitus(3);
 
    /* chip select goes high again...
     */
    PLD(SPI_CHIP_SELECT1) = PLDBIT2(SPI_CHIP_SELECT1, BASE_CS0, BASE_CS1);
+   waitus(3);
 
    /* we only use bottom 12 bits... */
    return ret&0x0fff;
