@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_fb.h
  *
- * $Revision: 1.1 $
+ * $Revision: 1.4 $
  * $Author: jkelley $
- * $Date: 2004-03-10 23:40:08 $
+ * $Date: 2004-06-02 19:39:58 $
  *
  * \b Usage:
  * \code
@@ -141,5 +141,17 @@ typedef enum {
     DOM_FB_MUX_PULSE
 
 } DOM_FB_MUX_INPUTS;
+
+/**
+ * Routine that reprograms the flasher board CPLD through
+ * its JTAG port, using XSVF data.
+ *
+ * \param p pointer to XSVF data
+ * \param nbytes length of XSVF data buffer, in bytes
+ *
+ * \return 0=success, 1=fail
+ */
+int 
+hal_FB_xsvfExecute(int *p, int nbytes);
 
 #endif

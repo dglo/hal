@@ -54,6 +54,10 @@ USHORT halReadDAC(UBYTE channel) {
 
 void halEnableBarometer() {;}
 void halDisableBarometer() {;}
+void halStartReadTemp() { }
+int halReadTempDone(void) { return 1; }
+
+USHORT halFinishReadTemp() { return 100; }
 USHORT halReadTemp() { return 100; }
 
 void halPowerUpBase(void) {}
@@ -516,4 +520,17 @@ void hal_FPGA_TEST_set_deadtime(int ns){}
 DOM_HAL_FPGA_TYPES hal_FPGA_query_type(void){ 
    return DOM_HAL_FPGA_TYPE_INVALID; 
 }
+void hal_FPGA_TEST_start_FB_flashing(void) {}
+void hal_FPGA_TEST_stop_FB_flashing(void) {}
+
+void hal_FB_enable(void) {}
+void hal_FB_disable(void) {}
+const char * hal_FB_get_serial(void) {return "deadbeefdeadbeef";}
+USHORT hal_FB_get_fw_version(void) {return 0;}
+USHORT hal_FB_get_hw_version(void) {return 0;}
+void hal_FB_set_pulse_width(UBYTE value) {}
+void hal_FB_set_brightness(UBYTE value) {}
+void hal_FB_enable_LEDs(USHORT enables) {}
+void hal_FB_select_mux_input(UBYTE value) {}
+int hal_FB_xsvfExecute(int *p, int nbytes) {return 0;}
 

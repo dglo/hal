@@ -2,6 +2,8 @@
  * \file DOM_FPGA_regs.h Description of the fpga registers...
  */
 
+#include "hal/DOM_FPGA_comm.h"
+
 /** 
  * Base address of the fpga code
  */
@@ -244,8 +246,8 @@
 #define DOM_FPGA_TEST_MISC_RESPONSE_COINC_UP_BBAR   0x00008000
 /** flasher board read */
 #define   DOM_FPGA_TEST_MISC_RESPONSE_FL_ATTN      (0x01000000)
-/** flasher board read */
-#define   DOM_FPGA_TEST_MISC_RESPONSE_FL_TD0       (0x10000000)
+/** flasher board read JTAG TDO */
+#define   DOM_FPGA_TEST_MISC_RESPONSE_FL_TDO       (0x10000000)
 /*@}*/
 
 /**
@@ -337,79 +339,6 @@ enum DOMPulserRates {
    /** ~.6kHz */
    DOMPulserRate_6k   = 0x70000
 };
-/*@}*/
-
-/**
- * \defgroup fpga_test_com_ctrl Communications control
- * \ingroup fpga_test_regs
- *
- * \brief This register contains control for the
- * dom communications channel. bits 8-15 are dudt,
- * bits, 16-25 are CAL_THR -- the calibration threshold.
- */
-/*@{*/
-/** register addresss */
-#define DOM_FPGA_TEST_COM_CTRL (DOM_FPGA_TEST_BASE + 0x1030)
-/** Signal that we're done reading a message from the Rx Fifo */
-#define DOM_FPGA_TEST_COM_CTRL_RX_DONE     0x00000001
-/** Request a reboot from com firmware */
-#define DOM_FPGA_TEST_COM_CTRL_REBOOT_REQUEST     0x00000004
-/*@}*/
-
-/**
- * \defgroup fpga_test_com_status Communications status
- * \ingroup fpga_test_regs
- *
- * \brief This register contains status information for the
- * dom communications channel.
- */
-/*@{*/
-/** register addresss */
-#define DOM_FPGA_TEST_COM_STATUS (DOM_FPGA_TEST_BASE + 0x1034)
-/** Is there a message waiting on the Rx */
-#define DOM_FPGA_TEST_COM_STATUS_RX_MSG_READY     0x00000001
-/** for debugging hardware... */
-#define DOM_FPGA_TEST_COM_STATUS_RX_READ_EMPTY    0x00000002
-/** com firmware grants request for reboot */
-#define DOM_FPGA_TEST_COM_STATUS_REBOOT_GRANTED   0x00000004
-/** is the comm firmware available? */
-#define DOM_FPGA_TEST_COM_STATUS_AVAIL            0x00000008
-/** is the comm firmware available? */
-#define DOM_FPGA_TEST_COM_STATUS_RX_WRITE_ALMOST_FULL    0x00000040
-/** for debugging hardware... */
-#define DOM_FPGA_TEST_COM_STATUS_RX_WRITE_FULL    0x00000080
-/** for debugging hardware... */
-#define DOM_FPGA_TEST_COM_STATUS_RX_MSG_COUNT_MASK    0x0000ff00
-/** The transmit fifo is almost empty */
-#define DOM_FPGA_TEST_COM_STATUS_TX_FIFO_ALMOST_EMPTY 0x00010000
-/** The transmit fifo is almost full */
-#define DOM_FPGA_TEST_COM_STATUS_TX_FIFO_ALMOST_FULL  0x00020000
-/** for debugging hardware... */
-#define DOM_FPGA_TEST_COM_STATUS_TX_READ_EMPTY  0x00100000
-/*@}*/
-
-/**
- * \defgroup fpga_test_com_tx_data Communications transmit data
- * \ingroup fpga_test_regs
- *
- * \brief This register contains the fifo transmit data going to the
- * dom communications channel.
- */
-/*@{*/
-/** register addresss */
-#define DOM_FPGA_TEST_COM_TX_DATA (DOM_FPGA_TEST_BASE + 0x1038)
-/*@}*/
-
-/**
- * \defgroup fpga_test_com_rx_data Communications receive data
- * \ingroup fpga_test_regs
- *
- * \brief This register contains the fifo receive data from the
- * dom communications channel.
- */
-/*@{*/
-/** register addresss */
-#define DOM_FPGA_TEST_COM_RX_DATA (DOM_FPGA_TEST_BASE + 0x103C)
 /*@}*/
 
 /**

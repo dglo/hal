@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_pld.h
  *
- * $Revision: 1.25 $
+ * $Revision: 1.32 $
  * $Author: arthur $
- * $Date: 2004-03-15 22:59:11 $
+ * $Date: 2004-05-18 21:36:29 $
  *
  * \b Usage:
  * \code
@@ -236,7 +236,10 @@ halReadBaseADC(void);
  * result in maximum permissible value being written to the selected DAC 
  * channel.  Values written to each DAC channel will be stored, on a channel 
  * by channel basis, within the hal library.  DAC values less than zero
- * will be assigned zero.
+ * will be assigned zero.  Also, we wait a DAC specific amount of time for
+ * the analog side of the DAC to settle, depending on the time constant
+ * of the circuit it drives (this time is typically 1us but can be as high
+ * as 25ms)
  *
  * Errors: Requests to write a value to an undefined DAC channel will result 
  * in no action taken.  No error indication will be given.
@@ -357,10 +360,48 @@ void
 halDisableBarometer(void);
 
 /**
+ * This routine prepares to read a value from the DOM MB mounted 
+ * temperature sensor.  This routine requires a matched call to
+ * halFinishReadTemp.
+ *
+ * \see halReadTemp
+ * \see halFinishReadTemp
+ */
+void
+halStartReadTemp(void);
+
+/**
+ * This routine checks to see if a previous call to halStartReadTemp
+ * had returned a value to the temperature sensor.
+ *
+ * \see halReadTemp
+ * \see halStartReadTemp
+ * \see halFinishReadTemp
+ */
+int
+halReadTempDone(void);
+
+/**
  * This routine reads a value from the DOM MB mounted temperature sensor.  
  * Calibration and interpretation of return values is not defined in this 
- * document.
+ * document.  This routine must be called after halStartReadTemp.  Normally,
+ * one would use halReadTemp to readout the temperature sensor.
  *
+ * \see halStartReadTemp
+ * \see halReadTemp
+ */
+USHORT
+halFinishReadTemp(void);
+
+/**
+ * This routine reads a value from the DOM MB mounted temperature sensor.  
+ * Calibration and interpretation of return values is not defined in this 
+ * document.  This routine is equivalent to:
+ * halStartReadTemp();
+ * halFinishReadTemp();
+ *
+ * \see halStartReadTemp
+ * \see halFinishReadTemp
  */
 USHORT
 halReadTemp(void);
@@ -421,6 +462,24 @@ halDisableFlasher();
  */
 BOOLEAN
 halFlasherState();
+
+/**
+ * Enable flasher board JTAG programming.  Must also
+ * enable FPGA control of flasher board JTAG ports.
+ *
+ * \see halDisableFlasherJTAG
+ */
+void
+halEnableFlasherJTAG();
+
+/**
+ * Disable flasher board JTAG programming.  Must also
+ * disable FPGA control of flasher board JTAG ports.
+ *
+ * \see halEnableFlasherJTAG
+ */
+void
+halDisableFlasherJTAG();
 
 /**
  * power up LED power supply
@@ -674,9 +733,9 @@ typedef enum {
 typedef enum {
    /* CS0 */
 
-   /** voltage sum node: -(-5/2.5)-(+3.3+2.5+1.8)/4 volts */
+   /** voltage sum node: -5+(3.3+5)*162/(100+162) volts */
    DOM_HAL_ADC_VOLTAGE_SUM,
-   /** 5V power supply value = Reading (2.5/4095)*(10K/34.9K) */
+   /** 5V power supply value = Reading 0+5*(10K/25K) volts */
    DOM_HAL_ADC_5V_POWER_SUPPLY,
    /** 
     * Pressure -- Value = 
@@ -693,6 +752,40 @@ typedef enum {
    DOM_HAL_ADC_1_8V_CURRENT,
    /** -5V analog current monitor (10mV/mA) measured on 5V side of switcher */
    DOM_HAL_ADC_MINUS_5V_CURRENT,
+   /** DISC-OneSPE */
+   DOM_HAL_ADC_DISC_ONESPE,
+   /** 1.8V analog voltage */
+   DOM_HAL_ADC_1_8V_POWER_SUPPLY,
+   /** 2.5V analog voltage */
+   DOM_HAL_ADC_2_5V_POWER_SUPPLY,
+   /** 3.3V analog voltage */
+   DOM_HAL_ADC_3_3V_POWER_SUPPLY,
+   /** DISC-MultiSPE */
+   DOM_HAL_ADC_DISC_MULTISPE,
+   /** FADC Reference */
+   DOM_HAL_ADC_FADC_0_REF,
+   /** Single LED-HV */
+   DOM_HAL_ADC_SINGLELED_HV,
+   /** DAC0 Channel A */
+   DOM_HAL_ADC_ATWDA_TRIGGER_BIAS_CURRENT,
+   /** DAC0 Channel B */
+   DOM_HAL_ADC_ATWDA_RAMP_TOP_VOLTAGE,
+   /** DAC0 Channel C */
+   DOM_HAL_ADC_ATWDA_RAMP_BIAS_CURRENT,
+   /** Analog Reference */
+   DOM_HAL_ADC_ANALOG_REF,
+   /** DAC1 Channel A */
+   DOM_HAL_ADC_ATWDB_TRIGGER_BIAS_CURRENT,
+   /** DAC1 Channel B */
+   DOM_HAL_ADC_ATWDB_RAMP_TOP_VOLTAGE,
+   /** DAC1 Channel C */
+   DOM_HAL_ADC_ATWDB_RAMP_BIAS_CURRENT,
+   /** Pedestal Value */
+   DOM_HAL_ADC_PEDESTAL,
+   /** FE Test Pulse Amplifier */
+   DOM_HAL_ADC_FE_TEST_PULSE_AMPL
+   
+
 } DOM_HAL_ADC_CHANNELS;
 
 

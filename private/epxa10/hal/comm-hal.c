@@ -14,9 +14,16 @@
 
 #include "booter/epxa.h"
 
-/* debugging -> insert bit errors... */
-#define INSERTBITERRORS
-#undef INSERTBITERRORS
+/* prepended to all packets... */
+static inline int pktLen(unsigned h)     { return h&0xfff; }
+static inline int pktType(unsigned h)    { return (h&0x7000)>>12; }
+static inline int pktDomType(unsigned h) { return (h&0x8000)>>15; }
+static inline int pktSeqn(unsigned h)    { return h>>16; }
+static inline int pktWords(unsigned h)   { return 1 + (pktLen(h)+3)/4; }
+
+static inline unsigned pktMkHdr(unsigned len, unsigned type, unsigned seqn) {
+   return (seqn<<16)|(type<<12)|len;
+}
 
 /* debugging -> serial */
 #define DEBUGSERIAL
@@ -70,110 +77,102 @@ static void debugUnindent(void) {
 # define SWPACKETASSEMBLY
 #endif
 
-/* tx queue size in bytes */
-#define HWTXQUEUESIZE (500+4)
-#define HWRXQUEUESIZE (500+4)
-
-/* tx max hardware packet size */
-#define HWTXMAXPACKETSIZE 500
-
-/* rx max hardware packet size */
-#define HWRXMAXPACKETSIZE 500
+/* rx/tx max hardware packet size 
+ */
+#define HWMAXPACKETLEN    150
+#define HWMAXPACKETSIZE   (HWMAXPACKETLEN*sizeof(unsigned))
+#define HWMAXPAYLOADLEN   (HWMAXPACKETLEN-1)
+#define HWMAXPAYLOADSIZE  (HWMAXPAYLOADLEN*sizeof(unsigned))
 
 /* max packet size from sw */
 #if defined(SWPACKETASSEMBLY)
-# define MAXSWPKTSIZE (4096 - (8+4)) /* make sure packet -> page... */
+ /* make sure packet + hdr fits in a page... */
+# define MAXSWPKTSIZE (4096 - sizeof(unsigned))
 #else
-# if defined(SWERRORCORRECTION)
-#  define MAXSWPKTSIZE (500 - (8+4))
-# else
-#  define MAXSWPKTSIZE 500
-# endif
+# define MAXSWPKTSIZE (HWMAXPACKETSIZE - sizeof(unsigned))
 #endif
 
-static int hasDualPortedComm() {
-   const unsigned *rom = (const unsigned *) DOM_FPGA_VERSIONING;
-   return rom[FPGA_VERSIONS_COM_DP]!=0;
+/* size of rx/tx dual ported memory buffer in 32 bit words */
+#define HWRXDPBUFFERLEN (8*1024)
+#define HWTXDPBUFFERLEN (8*1024)
+#define HWTXDPBUFFERPTR ( (unsigned *) 0x80000000 )
+#define HWRXDPBUFFERPTR ( (unsigned *) 0x80000000 + 8*1024)
+
+static inline unsigned short tx_dpr_radr(void) {
+   return (unsigned short) (*(unsigned volatile *) DOM_FPGA_COMM_TX_DPR_RADR);
 }
 
-static short hwQueueRemaining;
+static inline unsigned short tx_dpr_wadr(void) {
+   return (unsigned short) (*(unsigned volatile *) DOM_FPGA_COMM_TX_DPR_WADR);
+}
+
+static inline void set_tx_dpr_wadr(unsigned short waddr) {
+   *(unsigned volatile *) DOM_FPGA_COMM_TX_DPR_WADR = waddr;
+}
+
+static inline unsigned short rx_dpr_radr(void) {
+   return (unsigned short) (*(unsigned volatile *) DOM_FPGA_COMM_RX_DPR_RADR);
+}
+
+static inline void set_rx_dpr_radr(unsigned short raddr) {
+   *(unsigned volatile *) DOM_FPGA_COMM_RX_DPR_RADR = raddr;
+}
+
+/* how much space are we using in the tx buf?
+ *
+ * the value returned is in 32 bit word units...
+ */
+static inline unsigned short txSpaceUsed(void) {
+   return tx_dpr_wadr() - tx_dpr_radr();
+}
+
+/* how much space is left in tx? 
+ */
+static inline unsigned short txSpaceRemaining(void) {
+   const unsigned short size = HWTXDPBUFFERLEN;
+   return size - txSpaceUsed();
+}
 
 /* is there space for a hw tx packet? */
-static int isHWPktSpace(int len) {
-   if (RFPGABIT(TEST_COM_STATUS, TX_FIFO_ALMOST_FULL)==0) 
-      hwQueueRemaining = HWTXQUEUESIZE;
-   return len+4 <= hwQueueRemaining;
+static inline int isHWPktSpace(unsigned hdr) {
+   return txSpaceRemaining() >= pktWords(hdr);
 }
 
-static int hal_FPGA_TEST_hwsend(int type, int len, const char *msg) {
+/* very low level -- put a hw packet on the wire,
+ * block until space is avail...
+ */
+static int hal_FPGA_TEST_hwsend(const unsigned *msg) {
    int i;
-
-   if (len>4096) return 1;
+   const int nw = pktWords(*msg);
+   const int hwlen = nw*4;
    
-   if (!hasDualPortedComm()) {
-      /* wait for comm to become avail... */
-      while (!RFPGABIT(TEST_COM_STATUS, AVAIL)) 
-         writeDebug("hwsend: comm not avail!");
+   if (hwlen>HWMAXPACKETSIZE) return 1;
+            
+   {  unsigned *tx_buf = HWTXDPBUFFERPTR;
+      unsigned short waddr = tx_dpr_wadr();
 
-      /* wait for Tx fifo almost full to be low */
-      while (!isHWPktSpace(len)) ;
-      hwQueueRemaining -= len + 4;
-
-      /* send data */
-      FPGA(TEST_COM_TX_DATA) = type&0xff;
-      FPGA(TEST_COM_TX_DATA) = (type>>8)&0xff;  
-      FPGA(TEST_COM_TX_DATA) = len&0xff; 
-      FPGA(TEST_COM_TX_DATA) = (len>>8)&0xff; 
-      
-      for (i=0; i<len; i++) {
-#if defined(INSERTBITERRORS)
-         char v = msg[i];
-         static int flipit;
-         flipit++;
-         if (flipit==50000) {
-            v ^= 1;
-            flipit=0;
-         }
-         FPGA(TEST_COM_TX_DATA) = v;
-#else
-         FPGA(TEST_COM_TX_DATA) = msg[i];
-#endif
-      }
-   }
-   else {
-      unsigned const volatile *tx_dpr_raddr = 
-	 (unsigned const volatile *) 0x90081070;
-      unsigned const volatile *comm_status = 
-	 (unsigned const volatile *) 0x90081034;
-      unsigned char *tx_buf = (unsigned char *) 0x80000000;
-      unsigned short waddr = 
-	 (unsigned short) (*(unsigned volatile *) 0x90081070);
-
-      /* dual port ram interface... 
-       */
-      
       /* wait for comm avail... */
-      while ( (*comm_status & 0x40) == 0 ) ;
-      
+      while ( RFPGABIT(COMM_STATUS, AVAIL) == 0 ) ; 
+
       /* wait for the proper amount of space left... */
-      while ( ((unsigned short)16*1024) - 
-	      (waddr - (unsigned short)*tx_dpr_raddr) < 
-	      (unsigned short) (len+4)) ;
-      
-      /* send the header... */
-      tx_buf[4*(waddr%(16*1024))] = type&0xff; waddr++;
-      tx_buf[4*(waddr%(16*1024))] = (type>>8)&0xff; waddr++;
-      tx_buf[4*(waddr%(16*1024))] = len&0xff; waddr++;
-      tx_buf[4*(waddr%(16*1024))] = (len>>8)&0xff; waddr++;
+      while (!isHWPktSpace(*msg)) ;
+
+#if defined(DEBUGSERIAL)
+      {
+         char pmsg[80];
+         snprintf(pmsg, sizeof(pmsg), "send: 0x%08x", *msg);
+         writeDebug(pmsg);
+      }
+#endif
       
       /* send the data... */
-      for (i=0; i<len; i++) {
-	 tx_buf[4*(waddr%(16*1024))] = (unsigned char) msg[i]; 
+      for (i=0; i<nw; i++) {
+	 tx_buf[(waddr%((32/4)*1024))] = msg[i];
 	 waddr++;
       }
       
       /* write the pointer back (this will toggle pkt_ready)... */
-      *(unsigned volatile *) 0x90081070 = (unsigned) waddr;
+      set_tx_dpr_wadr(waddr);
    }
 
    return 0;
@@ -181,67 +180,36 @@ static int hal_FPGA_TEST_hwsend(int type, int len, const char *msg) {
 
 int hal_FPGA_TEST_hwmsg_ready(void) {
    /* wait for comm avail... */
-   while (!RFPGABIT(TEST_COM_STATUS, AVAIL)) 
+   while (!RFPGABIT(COMM_STATUS, AVAIL)) 
       writeDebug("msg_ready: comm not avail");
 
    /* return message ready... */
-   return RFPGABIT(TEST_COM_STATUS, RX_MSG_READY);
+   return RFPGABIT(COMM_STATUS, RX_PKT_RCVD)!=0;
 }
 
-static int hal_FPGA_TEST_hwreceive(int *type, int *len, char *msg) {
-   int i;
-   unsigned bytes[2];
+static int hal_FPGA_TEST_hwreceive(unsigned *msg) {
+   unsigned *rx_buf = HWRXDPBUFFERPTR;
+   unsigned short raddr = rx_dpr_radr();
+   
+   /* wait for msg */
+   while (!hal_FPGA_TEST_hwmsg_ready()) ;
+   
+   /* get header */
+   msg[0] = rx_buf[raddr%(1024*32/4)]; raddr++;
+   
+   /* get data */
+   {  const int nw = pktWords(msg[0]);
+      int i;
 
-   if (!hasDualPortedComm()) {
-      unsigned reg;
-      
-      /* wait for msg */
-      while (!hal_FPGA_TEST_hwmsg_ready()) ;
-
-      /* read it */
-      bytes[0] = FPGA(TEST_COM_RX_DATA)&0xff;
-      bytes[1] = FPGA(TEST_COM_RX_DATA)&0xff;
-      *type = (bytes[1]<<8) | bytes[0];
-
-      bytes[0] = FPGA(TEST_COM_RX_DATA)&0xff;
-      bytes[1] = FPGA(TEST_COM_RX_DATA)&0xff;
-      *len = (bytes[1]<<8) | bytes[0];
-      
-      for (i=0; i<*len; i++) msg[i] = FPGA(TEST_COM_RX_DATA)&0xff;
-
-      reg = FPGA(TEST_COM_CTRL);
-      FPGA(TEST_COM_CTRL) = reg | FPGABIT(TEST_COM_CTRL, RX_DONE);
-      FPGA(TEST_COM_CTRL) = reg & (~FPGABIT(TEST_COM_CTRL, RX_DONE));
-   }
-   else {
-      unsigned const volatile *comm_status = 
-	 (unsigned const volatile *) 0x90081034;
-      unsigned char *rx_buf = (unsigned char *) (0x80000000 + 1024*16*4);
-      unsigned short raddr = 
-	 (unsigned short) (*(unsigned volatile *) 0x90081078);
-
-      /* wait for msg */
-      while ( (*comm_status & 0x08) == 0 ) ;
-      
-      /* get header */
-      bytes[0] = rx_buf[4*(raddr%(16*1024))]; raddr++;
-      bytes[1] = rx_buf[4*(raddr%(16*1024))]; raddr++;
-      *type = (bytes[1]<<8) | bytes[0];
-      
-      bytes[0] = rx_buf[4*(raddr%(16*1024))]; raddr++;
-      bytes[1] = rx_buf[4*(raddr%(16*1024))]; raddr++;
-      *len = (bytes[1]<<8) | bytes[0];
-      
-      /* get data */
-      for (i=0; i<*len; i++) {
-	 msg[i] = (char) (rx_buf[4*(raddr%(16*1024))]); 
-	 raddr++;
+      for (i=1; i<nw; i++) {
+         msg[i] = rx_buf[raddr%(1024*32/4)];
+         raddr++;
       }
-      
-      /* write back pointer -- rx_done toggled inside fpga */
-      *(unsigned volatile *) 0x90081078 = (unsigned) raddr;
    }
 
+   /* write back pointer -- rx_done toggled inside fpga */
+   set_rx_dpr_radr(raddr);
+   
    return 0;
 }
 
@@ -273,20 +241,13 @@ static inline unsigned getTicks(void) {
    return *(volatile unsigned *) 0x7fffc270;
 }
 
-/* prepended to all packets... */
-typedef struct PktHdrStruct {
-   unsigned short flags; /* bit 0: acq, bit 1: syn_fin */
-   unsigned short type;  /* kalle type field... */
-   unsigned short len;   /* payload length in bytes */
-   unsigned short seqn;  /* sequence number */
-} PktHdr;
 
-/* convert payload length (PktHdr->len) to hardware packet length... 
+/* convert payload length (unsigned->len) to hardware packet length... 
  *
- * sizeof(PktHdr) + (payload length padded to 32 bits) + (32 bit crc)
+ * sizeof(unsigned) + (payload length padded to 32 bits) + (32 bit crc)
  */
 static inline int hwPktLen(int swlen) { 
-   return sizeof(PktHdr) + ((swlen+3)/4)*4 + 4;
+   return sizeof(unsigned) + ((swlen+3)/4)*4 + 4;
 }
 
 /* read queue size 
@@ -295,30 +256,30 @@ static inline int hwPktLen(int swlen) {
  * entire software packet.  we give it space for two
  * just in case (too much?)...
  */
-#define RDQUEUEDATASIZE (2*(MAXSWPKTSIZE + 4 + sizeof(PktHdr) + 4))
-#define RDQUEUEDATALEN  (RDQUEUEDATASIZE/sizeof(unsigned))
+#define RDQUEUEDATASIZE (2*(MAXSWPKTSIZE + sizeof(unsigned)))
+#define RDQUEUEDATALEN  ((RDQUEUEDATASIZE+3)/sizeof(unsigned))
 
 /* tx data size.
  *
  * the tx data buffer must have enough room to hold data until
  * we expect an acq back...
  */
-#define TXPKTDATASIZE (8*(HWTXQUEUESIZE + HWRXQUEUESIZE))
-#define TXPKTDATALEN  (TXPKTDATASIZE/sizeof(unsigned))
+#define TXPKTDATALEN  (1024*2)
+#define TXPKTDATASIZE (TXPKTDATALEN*sizeof(unsigned))
 
 /* length of retransmit queue
  *
  * we want to make sure that we won't fail an allocation
  * unless there is no tx data too...
  */
-#define WRPKTQUEUELEN (TXPKTDATASIZE/(4 + sizeof(PktHdr) + 4 + 4))
+#define WRPKTQUEUELEN (TXPKTDATASIZE/(sizeof(unsigned)))
 
 /* we keep one copy of this guy around
  * to pass back to the dor for compiling
  * statistics...
  */
 static struct DomStatsPkt {
-   PktHdr hdr;
+   unsigned hdr;
    int controlType;
    int nBadFins;
    int minRxQueueSize; /* smallest Rx queue avail size in bytes */
@@ -341,7 +302,6 @@ static struct DomStatsPkt {
    int nRxDroppedPkts;
    int nRxBadPkts;
    int nInvalidPostIC; /* number of invalid packets past ic... */
-   unsigned crc;
 } domStatsPkt;
 
 /* the retx list is a linked list, with a pointer
@@ -387,7 +347,6 @@ static RetxElt *retxAlloc(void) {
    /* unlink from the free list... */
    {  RetxElt *ret = retxFree;
       retxFree = retxFree->next;
-      /* ret->next = NULL; */
       memset(ret, 0, sizeof(RetxElt));
       return ret;
    }
@@ -427,8 +386,8 @@ static int retxDelete(unsigned short seqn) {
    /* delete is trickier... */
    RetxElt *prev = NULL, *t;
    for (t=retxTail; t!=NULL; prev=t, t=t->next) {
-      PktHdr *hdr = (PktHdr *) t->pkt;
-      if (hdr->seqn==seqn) {
+      unsigned hdr = t->pkt[0];
+      if (pktSeqn(hdr)==seqn) {
          /* found it! */
          if (t==retxTail) {
             /* normal case... */
@@ -440,6 +399,14 @@ static int retxDelete(unsigned short seqn) {
             prev->next = t->next;
             if (t==retxHead) retxHead = prev;
          }
+
+#if defined(DEBUGSERIAL) && 0
+         {
+            char msg[80];
+            snprintf(msg, sizeof(msg), "del seq: %hu", pktSeqn(hdr));
+            writeDebug(msg);
+         }
+#endif
 
          /* free the packet... */
          retxDispose(t);
@@ -470,18 +437,17 @@ static int rdQBytesFree(void) {
    return ret;
 }
 
-static inline int rdQFull(void) { return rdQBytesFree() < HWRXMAXPACKETSIZE; }
+static inline int rdQFull(void) { return rdQBytesFree() < HWMAXPACKETSIZE; }
 static inline int rdQEmpty(void) { return rdQHead==rdQTail; }
 
 /* get a packet from the read queue... */
-static PktHdr *rdQGet(void) {
+static unsigned *rdQGet(void) {
    const unsigned tailIdx = rdQTailIndex();
    unsigned *pkt = rdQData + tailIdx;
-   PktHdr *hdr = (PktHdr *) pkt;
-   PktHdr *ret = hdr;
-   const unsigned pktIdxLen = hwPktLen(hdr->len)/sizeof(unsigned);
-   const unsigned maxPktIdxLen = 
-      (HWRXMAXPACKETSIZE+(sizeof(unsigned)-1))/sizeof(unsigned);
+   unsigned hdr = *(unsigned *) pkt;
+   unsigned *ret = pkt;
+   const unsigned pktIdxLen = pktWords(hdr);
+   const unsigned maxPktIdxLen = HWMAXPACKETLEN;
 
    rdQTail += pktIdxLen;
    if (rdQTailIndex() + maxPktIdxLen >= RDQUEUEDATALEN) {
@@ -496,10 +462,9 @@ static PktHdr *rdQGet(void) {
 static void rdQPut(unsigned *pkt) {
    const unsigned headIdx = rdQHeadIndex();
    unsigned *hpkt = rdQData + headIdx;
-   PktHdr *hdr = (PktHdr *) pkt;
-   const unsigned pktIdxLen = hwPktLen(hdr->len)/sizeof(unsigned);
-   const unsigned maxPktIdxLen = 
-      (HWRXMAXPACKETSIZE+(sizeof(unsigned)-1))/sizeof(unsigned);
+   unsigned hdr = *(unsigned *) pkt;
+   const unsigned pktIdxLen = pktWords(hdr);
+   const unsigned maxPktIdxLen = HWMAXPACKETLEN;
 
    memcpy(hpkt, pkt, pktIdxLen*sizeof(unsigned));
 
@@ -511,10 +476,10 @@ static void rdQPut(unsigned *pkt) {
 }
 
 /* small copying collector for tx packets... */
-static PktHdr *txAlloc(int payloadlen) {
+static unsigned *txAlloc(int payloadlen) {
    static unsigned txPktData[2][TXPKTDATALEN];
    static int from, idx;
-   const int hwlen = hwPktLen(payloadlen)/sizeof(unsigned);
+   const int hwlen = pktWords(payloadlen);
 
    if (idx+hwlen>TXPKTDATALEN) {
       int tidx = 0;
@@ -525,11 +490,12 @@ static PktHdr *txAlloc(int payloadlen) {
       for (elt=retxTail; elt!=NULL; elt=elt->next) {
          if (elt->pkt!=NULL) {
             /* copy the packet... */
-            PktHdr *hdr = (PktHdr *) elt->pkt;
-            const int len = hwPktLen(hdr->len);
-            memcpy(txPktData[to] + tidx, hdr, len);
+            unsigned *pkt = (unsigned *) elt->pkt;
+            unsigned hdr = *(unsigned *) pkt;
+            const int nw = pktWords(hdr);
+            memcpy(txPktData[to] + tidx, pkt, nw*sizeof(unsigned));
             elt->pkt = txPktData[to] + tidx;
-            tidx += len/sizeof(unsigned);
+            tidx += nw;
          }
       }
       from = to;
@@ -538,98 +504,25 @@ static PktHdr *txAlloc(int payloadlen) {
 
    if (idx+hwlen<=TXPKTDATALEN) {
       /* there's room... */
-      PktHdr *ret = (PktHdr *) (txPktData[from] + idx);
+      unsigned *ret = txPktData[from] + idx;
       idx+=hwlen;
       return ret;
-  }
+   }
    
    return NULL;
 }
 
-
-/* Table of CRCs of all 8-bit messages. */
-static unsigned crc_table[256];
-
-/* Flag: has the table been computed? Initially false. */
-static int crc_table_computed = 0;
-
-/* Make the table for a fast CRC. */
-static void make_crc_table(void) {
-   unsigned c;
-   int n, k;
-   for (n = 0; n < 256; n++) {
-      c = (unsigned) n;
-      for (k = 0; k < 8; k++) {
-         if (c & 1) {
-            c = 0xedb88320L ^ (c >> 1);
-         }
-         else {
-            c = c >> 1;
-         }
-      }
-      crc_table[n] = c;
-   }
-   crc_table_computed = 1;
-}
-
-/*
-  Update a running crc with the bytes buf[0..len-1] and
-  the updated crc. The crc should be initialized to zero. Pre-
-  post-conditioning (one's complement) is performed within
-  function so it shouldn't be done by the caller. Usage example
-  
-  unsigned crc = 0L
-  
-  while (read_buffer(buffer, length) != EOF) {
-     crc = update_crc(crc, buffer, length);
-  }
-  if (crc != original_crc) error();
-*/
-static unsigned update_crc(unsigned crc,
-                           unsigned char *buf, int len) {
-   unsigned c = crc ^ 0xffffffffL;
-   int n;
-   
-   if (!crc_table_computed) make_crc_table();
-   
-   for (n = 0; n < len; n++) {
-      c = crc_table[(c ^ buf[n]) & 0xff] ^ (c >> 8);
-   }
-
-   return c ^ 0xffffffffL;
-}
-      
-/* Return the CRC of the bytes buf[0..len-1]. */
-static unsigned crc32(unsigned char *buf, int len) {
-   return update_crc(0L, buf, len);
-}
-
-static int crcok(unsigned *pkt, int len) {
-   const unsigned v = crc32((unsigned char *)pkt, len-4);
-   return (v == pkt[(len-1)/4]);
-}
-
 /* create an acq packet... */
-static unsigned  *mkAcqPkt(unsigned short seqn) {
-   /* hdr + crc32 */
-   static unsigned ar[sizeof(PktHdr)/4 + 1];
-   unsigned *sdata = ar + sizeof(PktHdr)/4;
-   PktHdr *hdr = (PktHdr *) ar;
-      
-   hdr->flags = 1;
-   hdr->len = 0;
-   hdr->type = 0;
-   hdr->seqn = seqn;
-   sdata[0] = crc32((unsigned char *) ar, sizeof(PktHdr));
-   return ar;
+static unsigned inline mkAcqPkt(unsigned short seqn) {
+   return pktMkHdr(0, 1, seqn);
 }
 
 /* wait for a packet from hardware...
  */
-static unsigned *rcvHWPkt(int *len, int *type) {
-   static unsigned pkt[HWRXMAXPACKETSIZE/sizeof(unsigned)];
-   memset(pkt, 0, sizeof(pkt));
-   hal_FPGA_TEST_hwreceive(type, len, (unsigned char *)pkt);
+static unsigned *rcvHWPkt(void) {
+   static unsigned pkt[HWMAXPACKETLEN];
+   memset(pkt, 0, sizeof(pkt)); /* !!!! FIXME: help!!! */
+   hal_FPGA_TEST_hwreceive(pkt);
    domStatsPkt.nRxPkts++;
    return pkt;
 }
@@ -652,56 +545,35 @@ static inline int ackQisFull(void) { return NACKQENTRIES == nAckQEntries(); }
 static inline int ackQisEmpty(void) { return aqHead == aqTail; }
 
 static void sendCI(void) {
-   static struct CIStruct {
-      PktHdr hdr;
-      unsigned crc;
-   } pkt;
-   
-   if (pkt.hdr.flags!=0x10) {
-      /* initialize... */
-      pkt.hdr.flags = 0x10;
-      pkt.crc = crc32((unsigned char *)&pkt, sizeof(pkt)-4);
-   }
-
-   if (isHWPktSpace(hwPktLen(0))) {
+   unsigned hdr = pktMkHdr(0, 5, 0);
+   if (isHWPktSpace(hdr)) {
       writeDebug("snd CI");
-      hal_FPGA_TEST_hwsend(0, hwPktLen(0), (char *)&pkt);
+      hal_FPGA_TEST_hwsend(&hdr);
    }
 }
 
 static void sendIC(void) {
-   static struct ICStruct {
-      PktHdr hdr;
-      unsigned crc;
-   } pkt;
-
-   if (pkt.hdr.flags!=0x08) {
-      /* initialize... */
-      pkt.hdr.flags = 0x08;
-      pkt.crc = crc32((unsigned char *)&pkt, sizeof(pkt)-4);
-   }
-   
-   if (isHWPktSpace(hwPktLen(0))) {
+   unsigned hdr = pktMkHdr(0, 4, 0);
+   if (isHWPktSpace(hdr)) {
       writeDebug("snd IC");
-      hal_FPGA_TEST_hwsend(0, hwPktLen(0), (char *)&pkt);
+      hal_FPGA_TEST_hwsend(&hdr);
    }
 }
 
 static void flushAckQueue(void) {
-   const int len = hwPktLen(0);
-   
-   while (!ackQisEmpty() && isHWPktSpace(len)) {
+   while (!ackQisEmpty() && isHWPktSpace(0)) {
       /* ack one packet -- since there's space... */
-      unsigned *pkt = mkAcqPkt(getAckQ());
-      PktHdr *hdr = (PktHdr *) pkt;
+      unsigned pkt = mkAcqPkt(getAckQ());
 
+#if defined(DEBUGSERIAL) && 0
       {  char msg[80];
          snprintf(msg, sizeof(msg), "snd ack: %hu [%u]", 
-                  hdr->seqn, getTicks());
+                  pktSeqn(pkt), getTicks());
          writeDebug(msg);
       }
-      
-      hal_FPGA_TEST_hwsend(0, len, (char *) pkt);
+#endif
+
+      hal_FPGA_TEST_hwsend(&pkt);
       domStatsPkt.nTxPkts++;
       domStatsPkt.nTxAckPkts++;
    }
@@ -752,31 +624,30 @@ static void connectUp(void) {
       /* we need a response to go on... */
       if (!hal_FPGA_TEST_hwmsg_ready()) continue;
 
-      {  int hwlen, hwtype;
-         unsigned *pkt = (unsigned *) rcvHWPkt(&hwlen, &hwtype);
-         PktHdr *hdr = (PktHdr *) pkt;
+      {  unsigned *pkt = rcvHWPkt();
+         const unsigned hdr = *pkt;
       
          writeDebugIndent("unconnected");
-         if (hdr->flags&0x10) {
+         if (pktType(hdr)==5) {
             writeDebug("got CI");
             connectInit();
             sendCI();
             ticks = getTicks();
          }
-         else if (hdr->flags&0x08) {
+         else if (pktType(hdr)==4) {
             writeDebug("got IC");
             
             while (hal_FPGA_TEST_hwmsg_ready()) {
                /* better be an ic! */
-               unsigned *pkt = (unsigned *) rcvHWPkt(&hwlen, &hwtype);
-               PktHdr *hdr = (PktHdr *) pkt;
-               if (hdr->flags&0x10) {
+               unsigned *pkt = rcvHWPkt();
+               const unsigned hdr = * (unsigned *) pkt;
+               if (pktType(hdr)==5) {
                   /* ci? */
                   writeDebug("loop: got CI");
                   connectInit();
                   break;
                }
-               else if ((hdr->flags&0x08)==0) {
+               else if (pktType(hdr)!=4) {
                   /* invalid packet... */
                   writeDebug("loop: invalid postIC");
                   
@@ -814,163 +685,177 @@ static int scanPkts(int aggressive) {
    
    while (hal_FPGA_TEST_hwmsg_ready() &&
           (aggressive || (!rdQFull() && !ackQisFull())) ) {
-      int hwlen, hwtype; 
       /* get the packet... */
-      unsigned *pkt = (unsigned *) rcvHWPkt(&hwlen, &hwtype);
+      unsigned *pkt = rcvHWPkt();
+      const unsigned hdr = *pkt;
+      const int hwtype = pktType(hdr);
+      const int hwlen = pktLen(hdr);
 
       /* update statistics... */
       domStatsPkt.nRxPkts++;
 
-      /* valid packet? */
-      if ((hwlen&0x3)==0 && hwlen>=4+sizeof(PktHdr) && 
-          hwlen<=HWRXMAXPACKETSIZE && crcok((unsigned *) pkt, hwlen)) {
-         PktHdr *hdr = (PktHdr *) pkt;
+      /* first, check for acq packet... */
+      if (hwtype==1 && hwlen==0) {
+         /* update statistics... */
+         domStatsPkt.nRxAckPkts++;
          
-         /* first, check for acq packet... */
-         if (hdr->flags&1) {
-            /* update statistics... */
-            domStatsPkt.nRxAckPkts++;
+         /* ack packet... */
+         const int idx = retxDelete(pktSeqn(hdr));
+         if (idx==0) {
+            /* whoops -- already acked! */
+            domStatsPkt.nRxDupAcks++;
             
-            /* ack packet... */
-            const int idx = retxDelete(hdr->seqn);
-            if (idx==0) {
-               /* whoops -- already acked! */
-               domStatsPkt.nRxDupAcks++;
-               {  char msg[80];
-                  snprintf(msg, sizeof(msg), 
-                           "rcv dup ack: seqn=%u", hdr->seqn);
-                  writeDebug(msg);
-               }
+#if defined(DEBUGSERIAL) && 0
+            {  char msg[80];
+               snprintf(msg, sizeof(msg), 
+                        "rcv dup ack: seqn=%u", pktSeqn(hdr));
+               writeDebug(msg);
             }
-            else {
-               /* transmitted packet is ok -- 
-                * drop it from retransmit queue... 
-                */
-               {  char msg[80];
-                  snprintf(msg, sizeof(msg), 
-                           "rcv good ack: %u [%u]", 
-                           hdr->seqn, getTicks());
-                  writeDebug(msg);
-               }
-               domStatsPkt.nRxGoodAcks++;
+#endif
+         }
+         else {
+            /* transmitted packet is ok -- 
+             * drop it from retransmit queue... 
+             */
+#if defined(DEBUGSERIAL) && 0
+            {  char msg[80];
+               snprintf(msg, sizeof(msg), 
+                        "rcv good ack: %u [%u]", 
+                        pktSeqn(hdr), getTicks());
+               writeDebug(msg);
+            }
+#endif
+            domStatsPkt.nRxGoodAcks++;
+         }
+      }
+      else if (hwtype==3 && hwlen<=HWMAXPAYLOADSIZE) {
+         domStatsPkt.nRxControlPkts++;
+            
+#if defined(DEBUGSERIAL) && 0
+         {
+            char msg[80];
+            snprintf(msg, sizeof(msg),
+                     "control packet: len=%d, data=%02x", pktLen(hdr),
+                     *(unsigned char *) (pkt+1));
+            writeDebug(msg);
+         }
+#endif
+      
+         /* control packet... */
+         if (* (unsigned char *) (pkt + 1) == 0 ) {
+            /* request for domstats... */
+            domStatsPkt.hdr = 
+               pktMkHdr(sizeof(domStatsPkt) - sizeof(unsigned), 3, 0);
+
+            domStatsPkt.controlType = 0;
+
+            if (isHWPktSpace(domStatsPkt.hdr)) {
+               hal_FPGA_TEST_hwsend((unsigned *) &domStatsPkt);
+               domStatsPkt.nTxControlPkts++;
+               domStatsPkt.nTxPkts++;
             }
          }
-         else if (hdr->flags&4) {
-            domStatsPkt.nRxControlPkts++;
+      }
+      else if (hwtype==4 && hwlen==0) {
+         /* IC */
+         writeDebug("connected: got IC");
+         state = STATE_UNCONNECTED;
+         rxSeqn = 0;
+         txSeqn = 0;
+         /* FIXME: do i really want to kill these?!?!? */
+         rdQHead = rdQTail = 0;
+         retxInit(1);
+         connectUp();
+      }
+      else if (hwtype==5 && hwlen==0) {
+         /* ignore CI when connected... */
+      }
+      else if ( (hwtype==0 || hwtype==2) && 
+                hwlen>0 && hwlen<=HWMAXPAYLOADSIZE) {
+         /* delSeqn is the difference between the packet seqn
+          * and our next expected sequence number...
+          *
+          * careful with the types here (so the wraparound comes
+          * out right)...
+          */
+         const signed short delSeqn = pktSeqn(hdr) - rxSeqn;
+         
+         /* update statistics... */
+         domStatsPkt.nRxDataPkts++;
+
+#if defined(DEBUGSERIAL)
+         {  char msg[80];
+            snprintf(msg, sizeof(msg),
+                     "rcv: 0x%08x", hdr);
+            writeDebugIndent(msg);
+         }
+#endif
+
+         /* data packet... */
+         if (delSeqn<0 && !ackQisFull()) {
+            /* we have to re-ack packets for which the ack didn't make
+             * it down...
+             */
+            domStatsPkt.nRxDupDataPkts++;
+            putAckQ(pktSeqn(hdr));
+            writeDebug("re-ack");
+         }
+         else if (pktLen(hdr)>0 && pktSeqn(hdr)==rxSeqn && 
+                  !rdQFull() && !ackQisFull()) {
+            /* valid data -- correct seqn and we have space for it... */
+            domStatsPkt.nRxGoodDataPkts++;
             
+            /* add to ack packet queue... */
+            putAckQ(pktSeqn(hdr));
+            
+            /* we have a new expected rx seqn */
+            rxSeqn = pktSeqn(hdr)+1;
+            
+            /* put it in the queue */
+            rdQPut(pkt);
+            
+            writeDebug("ok");
+         }
+         else { 
+            /* invalid seqn or read queue full, drop it on the floor */ 
+            domStatsPkt.nRxDroppedPkts++;
+            
+#if defined(DEBUGSERIAL)
             {
                char msg[80];
                snprintf(msg, sizeof(msg),
-                        "control packet: len=%d, data=%02x", hdr->len,
-                        *(unsigned char *) (pkt+1));
+                        "dropped: delSeqn=%hd, rdQFull()=%d, "
+                        "ackQisFull()=%d",
+                        delSeqn, rdQFull(), ackQisFull());
                writeDebug(msg);
             }
-            
-            /* control packet... */
-            if (hdr->len==1 && *(unsigned char *) (hdr + 1) == 0 ) {
-               /* request for domstats... */
-               domStatsPkt.hdr.flags = 4;
-               domStatsPkt.hdr.seqn = 0;
-               domStatsPkt.hdr.type = 0;
-               domStatsPkt.hdr.len = 
-                  sizeof(domStatsPkt) - sizeof(unsigned) - sizeof(PktHdr);
-               domStatsPkt.controlType = 0;
-               domStatsPkt.crc = crc32((unsigned char *)&domStatsPkt, 
-                                       sizeof(domStatsPkt)-4);
-
-               if (isHWPktSpace(sizeof(domStatsPkt))) {
-                  hal_FPGA_TEST_hwsend(0, sizeof(domStatsPkt), 
-                                       (char *) &domStatsPkt);
-                  domStatsPkt.nTxControlPkts++;
-                  domStatsPkt.nTxPkts++;
-               }
-            }
+#endif
          }
-         else if (hdr->flags&8) {
-            /* IC */
-            writeDebug("connected: got IC");
-            state = STATE_UNCONNECTED;
-            rxSeqn = 0;
-            txSeqn = 0;
-            /* FIXME: do i really want to kill these?!?!? */
-            rdQHead = rdQTail = 0;
-            retxInit(1);
-            connectUp();
-         }
-         else if (hdr->flags&0x10) {
-            /* ignore CI when connected... */
-         }
-         else {
-            /* delSeqn is the difference between the packet seqn
-             * and our next expected sequence number...
-             *
-             * careful with the types here (so the wraparound comes
-             * out right)...
-             */
-            const signed short delSeqn = hdr->seqn - rxSeqn;
-
-            /* update statistics... */
-            domStatsPkt.nRxDataPkts++;
-
-            {  char msg[80];
-               snprintf(msg, sizeof(msg),
-                        "rcv data: %hu [%u]", hdr->seqn, getTicks());
-               writeDebugIndent(msg);
-            }
-            
-            /* data packet... */
-            if (delSeqn<0 && !ackQisFull()) {
-               /* we have to re-ack packets for which the ack didn't make
-                * it down...
-                */
-               domStatsPkt.nRxDupDataPkts++;
-               putAckQ(hdr->seqn);
-               writeDebug("re-ack");
-            }
-            else if (hdr->len>0 && hdr->seqn==rxSeqn && 
-                     !rdQFull() && !ackQisFull()) {
-               /* valid data -- correct seqn and we have space for it... */
-               domStatsPkt.nRxGoodDataPkts++;
-
-               /* add to ack packet queue... */
-               putAckQ(hdr->seqn);
-               
-               /* we have a new expected rx seqn */
-               rxSeqn = hdr->seqn+1;
-
-               /* put it in the queue */
-               rdQPut(pkt);
-
-               writeDebug("ok");
-            }
-            else { 
-               /* invalid seqn or read queue full, drop it on the floor */ 
-               domStatsPkt.nRxDroppedPkts++;
-               
-               {
-                  char msg[80];
-                  snprintf(msg, sizeof(msg),
-                           "dropped: delSeqn=%hd, rdQFull()=%d, "
-                           "ackQisFull()=%d",
-                           delSeqn, rdQFull(), ackQisFull());
-                  writeDebug(msg);
-               }
-            }
-            debugUnindent();
-         }
+         debugUnindent();
       }
-      else { domStatsPkt.nRxBadPkts++; writeDebug("bad packet"); }
+      else { 
+         domStatsPkt.nRxBadPkts++; 
+
+#if defined(DEBUGSERIAL)
+         {
+            char msg[80];
+            snprintf(msg, sizeof(msg),
+                     "!!!BAD PACKET: hdr=0x%08x", hdr);
+            writeDebug(msg);
+         }
+#endif
+} 
 
       /* flush pending acks, if we can... */
       flushAckQueue();
-
+      
       /* signal that we did some work... */
       npackets++;
    }
 
    /* flush pending acks, if we can... */
    flushAckQueue();
-
+   
 #if 0
    writeDebug("done");
    debugUnindent();
@@ -984,27 +869,39 @@ static int scanPkts(int aggressive) {
 static int timeoutRetransmit(unsigned ticks) {
    /* retransmit all expired packets... */
    RetxElt *elt;
-   const unsigned tooOld = 50; /* 100ms */
+   const int tooOld = 100; /* 200ms */
    int found = 0;
    
    for (elt=retxTail; elt!=NULL; elt=elt->next) {
-      if (ticks - elt->ticks > tooOld) {
-         PktHdr *h = (PktHdr *) elt->pkt;
-         const int len = hwPktLen(h->len);
-   
-         found = 1;
+      unsigned *pkt = elt->pkt;
+      const int dt = (int) ticks - (int) elt->ticks;
+
+#if defined(DEBUGSERIAL) && 0
          {  char msg[80];
             snprintf(msg, sizeof(msg),
-                     "retx: seqn: %hu", h->seqn);
+                     "retx: seqn=%hu dt=%d", pktSeqn(*pkt), dt);
             writeDebug(msg);
          }
-         
+#endif
+      
+      if (pkt!=NULL && dt > tooOld) {
+         const unsigned h = *pkt;
+   
+         found = 1;
+
+#if defined(DEBUGSERIAL)
+         {  char msg[80];
+            snprintf(msg, sizeof(msg),
+                     "retx: seqn: %hu", pktSeqn(h));
+            writeDebug(msg);
+         }
+#endif
          /* don't go on if there is no space in tx... */
-         if (!isHWPktSpace(len)) break;
+         if (!isHWPktSpace(h)) break;
 
          /* mark the time again and resend... */
          elt->ticks = getTicks();
-         hal_FPGA_TEST_hwsend(h->type, len, (const char *) h);
+         hal_FPGA_TEST_hwsend(pkt);
          domStatsPkt.nTxPkts++;
          domStatsPkt.nTxResentPkts++;
       }
@@ -1073,37 +970,43 @@ static unsigned char *fillPkt(int *len, int *type) {
    static unsigned short idx; /* index into the rdPkt buffer */
    
    while (!rdQEmpty()) {
-      PktHdr *hdr = rdQGet();
+      unsigned *pkt = rdQGet();
+      const unsigned hdr = *pkt;
 
+#if defined(DEBUGSERIAL) && 0
       {  char msg[80];
          snprintf(msg, sizeof(msg),
-                  "fill: len=%hu, seqn=%hu", hdr->len, hdr->seqn);
+                  "fill: len=%hu, seqn=%hu", pktLen(hdr), pktSeqn(hdr));
          writeDebug(msg);
       }
+#endif
 
 #if defined(SWPACKETASSEMBLY)
       /* make sure the data fits... */
-      if (hdr->len + idx > MAXSWPKTSIZE) {
+      if (pktLen(hdr) + idx > MAXSWPKTSIZE) {
          /* clear the read idx */
          domStatsPkt.nBadFins++;
          idx = 0;
          
+#if defined(DEBUGSERIAL) && 0
          {
             char msg[80];
-            snprintf(msg, sizeof(msg), "packet too big: %d", hdr->len);
+            snprintf(msg, sizeof(msg), "packet too big: %d", pktLen(hdr));
             writeDebug(msg);
          }
+#endif
+
          return NULL;
       }
 #endif
 
       /* copy the data... */
-      memcpy(data + idx, hdr + 1, hdr->len);
-      idx += hdr->len;
+      memcpy(data + idx, pkt + 1, pktLen(hdr));
+      idx += pktLen(hdr);
       
 #if defined(SWPACKETASSEMBLY)
       /* no syn_fin, keep working on it... */
-      if ( (hdr->flags & 2) == 0) {
+      if (pktType(hdr) == 0) {
          writeDebug("no syn fin");
          continue;
       }
@@ -1111,7 +1014,7 @@ static unsigned char *fillPkt(int *len, int *type) {
       
       /* packet is complete... */
       *len = idx;
-      *type = hdr->type;
+      *type = pktType(hdr);
       idx = 0;
 
       return data;
@@ -1142,6 +1045,7 @@ int hal_FPGA_TEST_receive(int *type, int *len, char *msg) {
       /* do we have a filled packet in the rdQ? */
       if ((pkt=fillPkt(len, type))!=NULL) {
          /* fill the packet... */
+         /* FIXME: not another copy!!! */
          if (*len>0) memcpy(msg, pkt, *len);
          debugUnindent();
          return 0;
@@ -1185,16 +1089,15 @@ int hal_FPGA_TEST_send(int type, int len, const char *msg) {
 
    while (idx<len) {
       const int nleft = len-idx;
+      const int wleft = pktWords(nleft);
+
 #if defined(SWPACKETASSEMBLY)
-      const int nw =
-         (nleft + sizeof(PktHdr) + 4 > HWTXMAXPACKETSIZE) ? 
-         HWTXMAXPACKETSIZE - (sizeof(PktHdr) + 4) : nleft;
+      const int pktlen = 
+         (wleft > HWMAXPACKETLEN) ? 4 * (HWMAXPACKETLEN - 1) : nleft;
 #else
-      const int nw = nleft;
+      const int pktlen = nleft;
 #endif
       RetxElt *elt = NULL;
-      PktHdr *hdr = NULL;
-      const int sz = hwPktLen(nw);
 
       /* make sure there is space to send packet... */
       while (1) {
@@ -1213,23 +1116,18 @@ int hal_FPGA_TEST_send(int type, int len, const char *msg) {
          if (elt==NULL) writeDebug("failed retxAlloc!");
          else {
             /* try tx allocation... */
-            hdr = txAlloc(nw);
-            elt->pkt = (unsigned *) hdr;
-            if (hdr==NULL) {
+            if ((elt->pkt=txAlloc(pktlen))==NULL) {
                writeDebug("failed txAlloc!");
                retxDispose(elt);
                elt = NULL;
             }
          }
 
-         /* is there space for the packet? */
-         if (hdr!=NULL && elt!=NULL && isHWPktSpace(sz)) break;
+         /* is there space for the packet?
+          */
+         if (elt!=NULL && isHWPktSpace(pktlen)) break;
 
          writeDebug("no pkt space");
-
-         /* we need to reallocate our elt... */
-         retxDispose(elt);
-         elt = NULL;
 
          /* no space for tx/retx, process packets until we're free... */
          if (!scanPkts(0)) {
@@ -1239,24 +1137,20 @@ int hal_FPGA_TEST_send(int type, int len, const char *msg) {
       }
 
       /* wrap up packet */
-      memset(hdr, 0, sz);
-      hdr->len = nw;
-      hdr->type = type;
-      hdr->flags = (nleft == nw) ? 2 : 0; /* syn_fin? */
-      hdr->seqn = txSeqn;
+      elt->pkt[0] = pktMkHdr(pktlen, (pktlen==nleft) ? 2 : 0, txSeqn);
       txSeqn++;
-      
-      memcpy(elt->pkt + sizeof(PktHdr)/4, data + idx, nw);
-      idx += nw;
-      elt->pkt[sz/4 - 1] = crc32((unsigned char *) elt->pkt, sz - 4);
+      memcpy(elt->pkt + 1, data + idx, pktlen);
+      idx += pktlen;
       
       /* send it off on it's merry way... */
+#if defined(DEBUGSERIAL) && 0
       {
          char msg[80];
          snprintf(msg, sizeof(msg),
-                  "tx data: %hu [%u]", hdr->seqn, getTicks());
+                  "tx data: %hu [%u]", pktSeqn(elt->pkt[0]), getTicks());
          writeDebug(msg);
       }
+#endif
 
       /* mark the time it was sent... */
       elt->ticks = getTicks();
@@ -1267,11 +1161,10 @@ int hal_FPGA_TEST_send(int type, int len, const char *msg) {
       /* it's been added to retransmit queue, we can go ahead and send it,
        * the mem will be freed when (if) it is acked...
        */
-      hal_FPGA_TEST_hwsend(type, sz, (char *)elt->pkt);
+      hal_FPGA_TEST_hwsend(elt->pkt);
       domStatsPkt.nTxDataPkts++;
       domStatsPkt.nTxPkts++;
    }
-
    debugUnindent();
    return 0;
 }
@@ -1300,13 +1193,46 @@ int hal_FPGA_TEST_msg_ready(void) {
 
 int hal_FPGA_TEST_msg_ready(void) { return hal_FPGA_TEST_hwmsg_ready(); }
 
-
 int hal_FPGA_TEST_send(int type, int len, const char *msg) {
-   return hal_FPGA_TEST_hwsend(type, len, msg);
+   /* package up the packet... */
+   unsigned pkt[HWMAXPACKETLEN];
+   pkt[0] = pktMkHdr(len, 0, 0);
+   memcpy(pkt+1, msg, len);
+   return hal_FPGA_TEST_hwsend(pkt);
 }
 
 int hal_FPGA_TEST_receive(int *type, int *len, char *msg) {
-   return hal_FPGA_TEST_hwreceive(type, len, msg);
+   /* unpackage the packet... */
+   unsigned pkt[HWMAXPACKETLEN];
+   if (hal_FPGA_TEST_hwreceive(pkt)) return 1;
+   *type = pktType(*pkt);
+   *len = pktLen(*pkt);
+   memcpy(msg, pkt+1, *len);
+   return 0;
 }
 
 #endif
+
+void hal_FPGA_TEST_request_reboot(void) { 
+   unsigned reg = FPGA(COMM_CTRL);
+
+   /* wait for Tx to drain forever... */
+   while (txSpaceUsed()!=0) ;
+   
+   FPGA(COMM_CTRL) = reg | FPGABIT(COMM_CTRL, REBOOT_REQUEST); 
+}
+
+int  hal_FPGA_TEST_is_reboot_granted(void) {
+   return RFPGABIT(COMM_STATUS, REBOOT_GRANTED)!=0;
+}
+
+int hal_FPGA_TEST_is_comm_avail(void) {
+   return RFPGABIT(COMM_STATUS, AVAIL)!=0;
+}
+
+
+
+
+
+
+

@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_fpga.h
  *
- * $Revision: 1.34 $
- * $Author: jkelley $
- * $Date: 2004-03-10 23:40:08 $
+ * $Revision: 1.36 $
+ * $Author: arthur $
+ * $Date: 2004-05-12 17:25:59 $
  *
  * \b Usage:
  * \code
@@ -17,6 +17,11 @@
  *
  */
 #include "hal/DOM_MB_types.h"
+
+/**
+ * fpga clock ticks per second
+ */
+#define FPGA_HAL_TICKS_PER_SEC 40000000
 
 /**
  * check to see if triggered readout is done.
@@ -481,6 +486,99 @@ hal_FPGA_TEST_start_FB_flashing(void);
  */
 void
 hal_FPGA_TEST_stop_FB_flashing(void);
+
+/**
+ * Routine that enables FB JTAG port control.  Must
+ * also enable on flasherboard side via PLD.
+ *
+ * \see hal_FPGA_TEST_FB_JTAG_disable
+ * \see hal_FPGA_TEST_FB_JTAG_set_TCK
+ * \see hal_FPGA_TEST_FB_JTAG_set_TMS
+ * \see hal_FPGA_TEST_FB_JTAG_set_TDI
+ * \see hal_FPGA_TEST_FB_JTAG_get_TOD
+ *
+ */
+void
+hal_FPGA_TEST_FB_JTAG_enable(void);
+
+/**
+ * Routine that disables FB JTAG port control.  Must
+ * also disable on flasherboard side via PLD.
+ *
+ * \see hal_FPGA_TEST_FB_JTAG_enable
+ * \see hal_FPGA_TEST_FB_JTAG_set_TCK
+ * \see hal_FPGA_TEST_FB_JTAG_set_TMS
+ * \see hal_FPGA_TEST_FB_JTAG_set_TDI
+ * \see hal_FPGA_TEST_FB_JTAG_get_TDO
+ *
+ */
+void
+hal_FPGA_TEST_FB_JTAG_disable(void);
+
+
+/**
+ * Routine that sets the flasherboard JTAG
+ * TCK port.
+ *
+ * \see hal_FPGA_TEST_FB_JTAG_enable
+ * \see hal_FPGA_TEST_FB_JTAG_disable
+ * \see hal_FPGA_TEST_FB_JTAG_set_TMS
+ * \see hal_FPGA_TEST_FB_JTAG_set_TDI
+ * \see hal_FPGA_TEST_FB_JTAG_get_TDO
+ * 
+ * \param val value to write (0/1)
+ *
+ */
+void
+hal_FPGA_TEST_FB_JTAG_set_TCK(unsigned char val);
+
+/**
+ * Routine that sets the flasherboard JTAG
+ * TMS port.
+ *
+ * \see hal_FPGA_TEST_FB_JTAG_enable
+ * \see hal_FPGA_TEST_FB_JTAG_disable
+ * \see hal_FPGA_TEST_FB_JTAG_set_TCK
+ * \see hal_FPGA_TEST_FB_JTAG_set_TDI
+ * \see hal_FPGA_TEST_FB_JTAG_get_TDO
+ * 
+ * \param val value to write (0/1)
+ *
+ */
+void
+hal_FPGA_TEST_FB_JTAG_set_TMS(unsigned char val);
+
+/**
+ * Routine that sets the flasherboard JTAG
+ * TDI port.
+ *
+ * \see hal_FPGA_TEST_FB_JTAG_enable
+ * \see hal_FPGA_TEST_FB_JTAG_disable
+ * \see hal_FPGA_TEST_FB_JTAG_set_TCK
+ * \see hal_FPGA_TEST_FB_JTAG_set_TMS
+ * \see hal_FPGA_TEST_FB_JTAG_get_TDO
+ * 
+ * \param val value to write (0/1)
+ *
+ */
+void
+hal_FPGA_TEST_FB_JTAG_set_TDI(unsigned char val);
+
+/**
+ * Routine that reads the flasherboard JTAG
+ * TDO port.
+ *
+ * \see hal_FPGA_TEST_FB_JTAG_enable
+ * \see hal_FPGA_TEST_FB_JTAG_disable
+ * \see hal_FPGA_TEST_FB_JTAG_set_TCK
+ * \see hal_FPGA_TEST_FB_JTAG_set_TMS
+ * \see hal_FPGA_TEST_FB_JTAG_set_TDI
+ *
+ * \returns value of TDO (0/1)
+ *
+ */
+unsigned char
+hal_FPGA_TEST_FB_JTAG_get_TDO(void);
 
 /**
  * request reboot

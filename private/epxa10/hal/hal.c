@@ -79,6 +79,14 @@ void halEnableBaseHV(void) {
 }
 
 USHORT halReadADC(UBYTE channel) {
+   /* HACK!!!! HACK!!!!
+    *
+    * FIXME: first read from the ADC gives
+    * the wrong value.  here we just throw it
+    * away, we should fix this!!!
+    */
+   static int init = 0;
+   if (!init) { max1139Read(channel/12, channel % 12); init = 1; }
    return max1139Read(channel/12, channel % 12);
 }
 
@@ -134,7 +142,30 @@ void halWriteDAC(UBYTE channel, int value) {
       max534Write(dev, value);
    }
 
-   
+   /* sleep until DAC has settled... */
+   if (channel==DOM_HAL_DAC_MULTIPLE_SPE_THRESH ||
+       channel==DOM_HAL_DAC_SINGLE_SPE_THRESH) {
+      halUSleep(1200 * 5);
+   }
+   else if (channel==DOM_HAL_DAC_FAST_ADC_REF) {
+      halUSleep(5000 * 5);
+   }
+   else if (channel==DOM_HAL_DAC_FL_REF) {
+      halUSleep(500 * 5);
+   }
+   else if (channel==DOM_HAL_DAC_MUX_BIAS) {
+      halUSleep(1000 * 5);
+   }
+   else if (channel==DOM_HAL_DAC_ATWD_ANALOG_REF) {
+      halUSleep(1250 * 5);
+   }
+   else if (channel==DOM_HAL_DAC_PMT_FE_PEDESTAL) {
+      halUSleep(6250 * 2);
+   }
+   else {
+      halUSleep(1);
+   }
+
    PLD(SPI_CHIP_SELECT0) = ~0;
 }
 
@@ -163,7 +194,7 @@ USHORT halReadDAC(UBYTE channel) {
    return daclookup[channel];
 }
 
-USHORT halReadTemp(void) { 
+void halStartReadTemp(void) {
    static int chk = 1;
    
    if (chk) {
@@ -189,12 +220,18 @@ USHORT halReadTemp(void) {
     * mode for power savings)...
     */
    convertDS1631();
+}
 
-   /* wait for conversion done bit...
-    */
-   while ((readDS1631Config()&0x80) == 0) ;
+int halReadTempDone(void) { return (readDS1631Config()&0x80) != 0; }
 
+USHORT halFinishReadTemp(void) {
+   while (!halReadTempDone()) ;
    return readDS1631Temp();
+}
+
+USHORT halReadTemp(void) { 
+   halStartReadTemp();
+   return halFinishReadTemp();
 }
 
 static UBYTE muxlookup;
@@ -233,6 +270,8 @@ void halDisableBarometer(void) {
       PLD(SYSTEM_CONTROL) & (~PLDBIT(SYSTEM_CONTROL, BAROMETER_ENABLE));
 }
 
+static int hvIsPowered = 0;
+
 void halPowerUpBase(void) {
    /* ltc1257 requires cs0 to be low on power up...
     */
@@ -255,6 +294,8 @@ void halPowerUpBase(void) {
    /* chip selects are normally high...
     */
    PLD(SPI_CHIP_SELECT1) = PLDBIT2(SPI_CHIP_SELECT1, BASE_CS0, BASE_CS1); 
+
+   hvIsPowered = 1;
 }
 
 void halPowerDownBase(void) {
@@ -264,6 +305,8 @@ void halPowerDownBase(void) {
    /* drop power */
    PLD(SYSTEM_CONTROL) = 
       PLD(SYSTEM_CONTROL) & (~PLDBIT(SYSTEM_CONTROL, HV_PS_ENABLE));
+
+   hvIsPowered = 0;
 }
 
 void halEnableFlasher(void) {
@@ -274,6 +317,16 @@ void halEnableFlasher(void) {
 void halDisableFlasher(void) {
    PLD(SYSTEM_CONTROL) = 
       PLD(SYSTEM_CONTROL) & (~PLDBIT(SYSTEM_CONTROL, FLASHER_ENABLE));
+}
+
+void halEnableFlasherJTAG(void) {
+   PLD(SYSTEM_CONTROL) = 
+      PLD(SYSTEM_CONTROL) | PLDBIT(SYSTEM_CONTROL, FLASHER_JTAGEN);
+}
+
+void halDisableFlasherJTAG(void) {
+   PLD(SYSTEM_CONTROL) = 
+      PLD(SYSTEM_CONTROL) & (~PLDBIT(SYSTEM_CONTROL, FLASHER_JTAGEN));
 }
 
 BOOLEAN halFlasherState() {
@@ -407,10 +460,6 @@ const char *halGetBoardID(void) {
    static char id[256];
    static int isInit = 0;
    if (!isInit) {
-#if 0
-      /* doesn't seem to be supported in newlib!?! (tried llx too) */
-      snprintf(id, sizeof(id), "%012Lx", halGetBoardIDRaw());
-#else
       int shift = 44, i = 0;
       const unsigned long long bid = halGetBoardIDRaw();
       while (shift>=0) {
@@ -419,7 +468,6 @@ const char *halGetBoardID(void) {
          shift -= 4;
          i++;
       }
-#endif
       isInit = 1;
    }
    return id;
@@ -492,7 +540,7 @@ static void writeSPI(int val, int bits) {
    PLD(SPI_CTRL) = reg;
 }
 
-/* read up to 32 bit value from the spi, assume chips can handle 1MHz
+/* read up to 32 bit value from the spi, assume chips can handle 166KHz
  *
  * data is read after falling edge...
  */
@@ -502,14 +550,14 @@ static int readSPI(int bits, int msk) {
    int ret = 0;
 
    PLD(SPI_CTRL) = reg;
-   waitus(1);
+   waitus(3);
    
    for (mask=(1<<(bits-1)); mask>0; mask>>=1) {
       PLD(SPI_CTRL) = reg | PLDBIT(SPI_CTRL, SERIAL_CLK);
-      waitus(1);
+      waitus(3);
       
       PLD(SPI_CTRL) = reg;
-      waitus(1);
+      waitus(3);
 
       ret = (ret<<1) | ((PLD(SPI_READ_DATA) & msk) ? 1 : 0);
    }
@@ -848,20 +896,22 @@ static int readLTC1286(void) {
    /* clock low...
     */
    PLD(SPI_CTRL) = reg;
-   waitus(1);
+   waitus(3);
 
    /* cs low...
     */
    PLD(SPI_CHIP_SELECT1) = PLDBIT(SPI_CHIP_SELECT1, BASE_CS0);
-   waitus(1);
+   waitus(3);
 
    /* read out results...
     */
    ret = readSPI(14, PLDBIT(SPI_READ_DATA, MISO_DATA_BASE));
+   waitus(3);
 
    /* chip select goes high again...
     */
    PLD(SPI_CHIP_SELECT1) = PLDBIT2(SPI_CHIP_SELECT1, BASE_CS0, BASE_CS1);
+   waitus(3);
 
    /* we only use bottom 12 bits... */
    return ret&0x0fff;
@@ -882,29 +932,31 @@ static void waitBusy(void) { while (RPLDBIT(ONE_WIRE, BUSY)) ; }
 const char *halHVSerial(void) {
    int i;
    const char *hexdigit = "0123456789abcdef";
-   const int sz = 64/4+1;
-   char *t = (char *)malloc(sz);
-   if (t==NULL) return NULL;
-   memset(t, 0, sz);
-
-   PLD(ONE_WIRE) = 0xf;
-   waitBusy();
-
-   for (i=0; i<8; i++) {
-      PLD(ONE_WIRE) = ( (0x33>>i) & 1 ) ? 0x9 : 0xa;
+   static char t[64/4+1];
+   static int isInit = 0;
+   
+   if (!isInit && hvIsPowered) {
+      PLD(ONE_WIRE) = 0xf;
       waitBusy();
-   }
-
-   for (i=0; i<64; i++) {
-      PLD(ONE_WIRE) = 0xb;
-      waitBusy();
-      t[i/4]<<=1;
-      if (RPLDBIT(ONE_WIRE, DATA)) {
-	 t[i/4] |= 1;
+      
+      for (i=0; i<8; i++) {
+         PLD(ONE_WIRE) = ( (0x33>>i) & 1 ) ? 0x9 : 0xa;
+         waitBusy();
       }
+      
+      for (i=0; i<64; i++) {
+         PLD(ONE_WIRE) = 0xb;
+         waitBusy();
+         t[i/4]<<=1;
+         if (RPLDBIT(ONE_WIRE, DATA)) {
+            t[i/4] |= 1;
+         }
+      }
+      
+      for (i=0; i<64/4; i++) t[i] = hexdigit[(int)t[i]];
+      
+      isInit = 1;
    }
-
-   for (i=0; i<64/4; i++) t[i] = hexdigit[(int)t[i]];
    
    return t;
 }
