@@ -275,6 +275,9 @@ void halDisableBarometer(void) {
 static int hvIsPowered = 0;
 
 void halPowerUpBase(void) {
+   /* don't power up if we're already powered... */
+   if (hvIsPowered) return;
+   
    /* ltc1257 requires cs0 to be low on power up...
     */
    PLD(SPI_CHIP_SELECT1) = 0; 
@@ -301,6 +304,9 @@ void halPowerUpBase(void) {
 }
 
 void halPowerDownBase(void) {
+   /* don't power down if we're already unpowered... */
+   if (hvIsPowered==0) return;
+   
    /* drop disable */
    halEnableBaseHV();
    
