@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_fpga.h
  *
- * $Revision: 1.40.2.2 $
+ * $Revision: 1.40.2.3 $
  * $Author: arthur $
- * $Date: 2004-11-24 19:47:10 $
+ * $Date: 2005-01-17 00:02:19 $
  *
  * \b Usage:
  * \code
@@ -415,6 +415,18 @@ hal_FPGA_TEST_get_ping_pong_clock(void);
  */
 void
 hal_FPGA_TEST_readout_ping_pong_done(void);
+
+/**
+ * discriminator launch of the atwd/fadc...
+ * when LC is enabled
+ * \param trigger_mask bitmask of devices to trigger
+ *
+ * \see HAL_FPGA_TEST_TRIGGER_ATWD0
+ * \see HAL_FPGA_TEST_TRIGGER_ATWD1
+ * \see HAL_FPGA_TEST_TRIGGER_FADC
+ */
+void
+hal_FPGA_TEST_trigger_disc_lc(int trigger_mask);
 
 
 /**
