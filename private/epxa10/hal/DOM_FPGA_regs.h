@@ -342,7 +342,7 @@ enum DOMPulserRates {
 /** Signal that we're done reading a message from the Rx Fifo */
 #define DOM_FPGA_TEST_COM_CTRL_RX_DONE     0x00000001
 /** Request a reboot from com firmware */
-#define DOM_FPGA_TEST_COM_CTRL_REBOOT_REQUEST     0x00000002
+#define DOM_FPGA_TEST_COM_CTRL_REBOOT_REQUEST     0x00000004
 /*@}*/
 
 /**

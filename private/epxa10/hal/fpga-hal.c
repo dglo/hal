@@ -300,8 +300,12 @@ void hal_FPGA_TEST_disable_pulser(void) {
    FPGA(TEST_SIGNAL) = reg;
 }
 
-void hal_FPGA_TEST_request_reboot(void) { FPGA(TEST_COM_CTRL) = 2; }
-int  hal_FPGA_TEST_is_reboot_granted(void) { 
+void hal_FPGA_TEST_request_reboot(void) { 
+   unsigned reg = FPGA(TEST_COM_CTRL);
+   FPGA(TEST_COM_CTRL) = reg | FPGABIT(TEST_COM_CTRL, REBOOT_REQUEST); 
+}
+
+int  hal_FPGA_TEST_is_reboot_granted(void) {
    return RFPGABIT(TEST_COM_STATUS, REBOOT_GRANTED)!=0;
 }
 

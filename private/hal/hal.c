@@ -456,3 +456,8 @@ hal_FPGA_TEST_get_mpe_rate(void) {
 
 unsigned long long 
 hal_FPGA_TEST_get_local_clock(void) { return 123456;}
+
+int halIsFPGALoaded(void) { return 0; }
+
+void hal_FPGA_TEST_request_reboot(void){}
+int hal_FPGA_TEST_is_reboot_granted(void) { return 1; }
