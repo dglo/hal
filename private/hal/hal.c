@@ -5,6 +5,8 @@
  */
 #include <unistd.h>
 #include <time.h>
+#include <errno.h>
+
 #include "hal/DOM_MB_hal_simul.h"
 
 // define true and false
@@ -30,7 +32,7 @@ void halClrFlashBoot() { flashboot = 0; }
 BOOLEAN halFlashBootState() { return flashboot; }
 
 USHORT halReadADC(UBYTE channel) { 
-    if(channel >= DOM_HAL_NUM_ADC_CHANNELS) return;
+    if(channel >= DOM_HAL_NUM_ADC_CHANNELS) return 0xffff;
     return ADC[channel]; 
 }
 
@@ -58,6 +60,7 @@ void halWritePassiveBaseDAC(USHORT value) { PMT_HV = value&0xfff; }
 USHORT halReadPMT_HV() { return PMT_HV; }
 USHORT halReadBaseADC(void) { return PMT_HV;}
 USHORT halReadBaseDAC(void) { return PMT_HV;}
+void halWriteBaseDAC(USHORT value) {PMT_HV = value;}
 
 static UBYTE muxlookup;
 
@@ -91,7 +94,9 @@ void halEnableSerialDSR() { serialdsr = 1; }
 void halDisableSerialDSR() { serialdsr = 0; }
 BOOLEAN halSerialDSRState() { return serialdsr; }
 
-void halBoardReboot() { }
+void halBoardReboot() {
+   exit(0);
+}
 
 UBYTE boardID[6]={0,0,0,0,0,0};
 char *halGetBoardID(void) {
@@ -167,7 +172,21 @@ char boardName[128]="none";
 char *halGetBoardName(void) {return boardName; }
 void halSetBoardName(char *name) { strcpy(boardName,name);}
 
-void halUSleep(int us) { usleep(us); }
+void halUSleep(int us) { 
+   struct timespec ts, rm;
+
+   ts.tv_sec = us/1000000;
+   ts.tv_nsec = (us%1000000)*1000;
+
+   while (1) {
+      if (nanosleep(&ts, &rm)<0 && errno==EINTR) {
+	 ts = rm;
+      }
+      else return;
+   }
+   
+   /* usleep(us); */
+}
 
 UBYTE *bufferBaseAddr;
 int bufferMask;
@@ -384,3 +403,79 @@ hal_FPGA_TEST_receive(int *type, int *len, char *msg) {
 long long hal_FPGA_getClock() {
     return (long long)time(NULL);
 }
+
+BOOLEAN ATWD0_done = FALSE;
+BOOLEAN ATWD1_done = FALSE;
+
+BOOLEAN
+hal_FPGA_TEST_atwd_readout_done(int chip) {
+    if(chip == 0) return ATWD0_done;
+    else return ATWD1_done;
+
+}
+
+int
+hal_FPGA_TEST_atwd_readout(short *ch0, short *ch1, short *ch2, short *ch3,
+	int max, int chip) {
+    int i;
+
+    if(max > 128) max = 128;
+    for(i = 0; i < max; i++) {
+	ch0[i]=i%4;
+	ch1[i]=i%8;
+	ch2[i]=i%12;
+	ch3[i]=i%16;
+    }
+    if(chip == 0) ATWD0_done = FALSE;
+    else ATWD1_done = FALSE;
+    return max;
+}
+
+int
+hal_FPGA_TEST_fadc_readout(short *fadc, int max) {
+    int i;
+ 
+    if(max > 256) max = 256;
+    for(i = 0; i < max; i++) {
+        fadc[i]=i;
+    }
+    return max;
+}
+
+void 
+hal_FPGA_TEST_trigger_forced(int chip) {
+    if(chip == 0) ATWD0_done = TRUE;
+    else ATWD1_done = TRUE;
+}
+
+void
+hal_FPGA_TEST_trigger_disc(int chip) {
+    if(chip == 0) ATWD0_done = TRUE;
+    else ATWD1_done = TRUE;
+
+}
+
+
+const char *halHVSerial(void) { return "flash-serial"; }
+
+void
+hal_FPGA_TEST_set_pulser_rate(DOM_HAL_FPGA_PULSER_RATES rate){}
+
+void
+hal_FPGA_TEST_enable_pulser(void){}
+ 
+void
+hal_FPGA_TEST_disable_pulser(void){}
+
+int
+hal_FPGA_TEST_get_spe_rate(void) {
+    return 1234;
+}
+
+int
+hal_FPGA_TEST_get_mpe_rate(void) {
+    return 2345;
+}
+
+unsigned long long 
+hal_FPGA_TEST_get_local_clock(void) { return 123456;}

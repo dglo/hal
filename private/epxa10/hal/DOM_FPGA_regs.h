@@ -8,6 +8,11 @@
 #define DOM_FPGA_BASE (0x90000000)
 
 /**
+ * Address of versioning info
+ */
+#define DOM_FPGA_VERSIONING DOM_FPGA_BASE
+
+/**
  * \defgroup fpga_test_regs FPGA Test Registers
  *
  * \brief Base address of the fpga test code.
@@ -21,7 +26,7 @@
 /*@}*/
 
 /**
- * \defgroup fpga_test_acquire Data Acquisition Trigger
+ * \defgroup fpga_test_signal Signal control
  * \ingroup fpga_test_regs
  *
  * \brief We use this register to trigger acquisition
@@ -29,85 +34,92 @@
  */
 /*@{*/
 /** Register to trigger acquisition of data */
-#define DOM_FPGA_TEST_ACQUIRE (DOM_FPGA_TEST_BASE + 0x1000)
-/** send a triangle wave out comm dac */
-#define   DOM_FPGA_TEST_ACQUIRE_COMM_DAC_TRIANGLE (0x00000001)
-/** send a square wave out comm dac */
-#define   DOM_FPGA_TEST_ACQUIRE_COMM_DAC_SQUARE   (0x00000002)
-/** acquire a comm adc signal */
-#define   DOM_FPGA_TEST_ACQUIRE_COMM_ADC          (0x00000100)
+#define DOM_FPGA_TEST_SIGNAL (DOM_FPGA_TEST_BASE + 0x1000)
+
+/** take data from ATWD 0 */
+#define   DOM_FPGA_TEST_SIGNAL_ATWD0        (0x00000001)
+/** take data from ATWD 0 trigger by discriminator */
+#define   DOM_FPGA_TEST_SIGNAL_ATWD0_DISC   (0x00000002)
+/** take data from ATWD 1 */
+#define   DOM_FPGA_TEST_SIGNAL_ATWD1        (0x00000100)
+/** take data from ATWD 1 trigger from discriminator */
+#define   DOM_FPGA_TEST_SIGNAL_ATWD1_DISC   (0x00000200)
 /** acquire a fast adc signal */
-#define   DOM_FPGA_TEST_ACQUIRE_FADC              (0x00010000)
+#define   DOM_FPGA_TEST_SIGNAL_FADC         (0x00010000)
+/** acquire a fast adc signal from discriminator */
+#define   DOM_FPGA_TEST_SIGNAL_FADC_DISC    (0x00020000)
 /** acquire a front end pulser */
-#define   DOM_FPGA_TEST_ACQUIRE_FE_PULSER         (0x01000000)
+#define   DOM_FPGA_TEST_SIGNAL_FE_PULSER    (0x01000000)
 /** acquire a single LED pulser */
-#define   DOM_FPGA_TEST_ACQUIRE_LED_PULSER        (0x10000000)
+#define   DOM_FPGA_TEST_SIGNAL_LED_PULSER   (0x10000000)
+/** create a test waveform for debugging -- into channel 3 of ATWD */
+#define   DOM_FPGA_TEST_SIGNAL_R2R_TRIANGLE      (0x00010000)
+/** create a test waveform for debugging -- into front end, after delay line */
+#define   DOM_FPGA_TEST_SIGNAL_R2R_TRIANGLE_FE   (0x00100000)
 /*@}*/
 
 /**
- * \defgroup fpga_test_acquire_status Data Acquisition Trigger Status
+ * \defgroup fpga_test_signal_response ATWD and FADC Signal responses
  * \ingroup fpga_test_regs
  * \brief This register is used to check on the
- * status of an acquisition
+ * status of a signal command
  */
 /*@{*/
 /** Register to trigger acquisition of data */
-#define DOM_FPGA_TEST_ACQUIRE_STATUS (DOM_FPGA_TEST_BASE + 0x1004)
-/** acquisition of a comm adc signal is done */
-#define   DOM_FPGA_TEST_ACQUIRE_COMM_ADC_DONE     (0x00000100)
+#define DOM_FPGA_TEST_SIGNAL_RESPONSE (DOM_FPGA_TEST_BASE + 0x1004)
+
+/** atwd0 done collecting? */
+#define   DOM_FPGA_TEST_SIGNAL_RESPONSE_ATWD0     (0x00000001)
+/** atwd1 done collecting? */
+#define   DOM_FPGA_TEST_SIGNAL_RESPONSE_ATWD1     (0x00000100)
 /** acquisition of a fast adc signal is done */
-#define   DOM_FPGA_TEST_ACQUIRE_FADC_DONE         (0x00010000)
+#define   DOM_FPGA_TEST_SIGNAL_RESPONSE_FADC_DONE (0x00010000)
+
 /*@}*/
 
 /**
- * \defgroup fpga_test_local Local Coincidence Control
+ * \defgroup fpga_test_comm Communications control
  * \ingroup fpga_test_regs
  *
- * \brief We use this register to set the local coincidence mode.
+ * \brief We use this register to control communications.
+ *  The pulser rate sits in bits 16-19.
  */
 /*@{*/
 /** register address */
-#define DOM_FPGA_TEST_LOCAL (DOM_FPGA_TEST_BASE + 0x1008)
+#define DOM_FPGA_TEST_COMM (DOM_FPGA_TEST_BASE + 0x1008)
 
-/** switch on local coincidence with dom above */
-#define   DOM_FPGA_TEST_LOCAL_UP           (0x00000001)
-/** switch on local coincidence with dom below */
-#define   DOM_FPGA_TEST_LOCAL_DOWN         (0x00000002)
-/** send high pulse to lower dom */
-#define   DOM_FPGA_TEST_LOCAL_DOWN_HIGH    (0x00000100)
-/** send low pulse to lower dom */
-#define   DOM_FPGA_TEST_LOCAL_DOWN_LOW     (0x00000200)
-/** send high pulse to upper dom */
-#define   DOM_FPGA_TEST_LOCAL_UP_HIGH      (0x00000400)
-/** send low pulse to upper dom */
-#define   DOM_FPGA_TEST_LOCAL_UP_LOW       (0x00000800)
-/** for lower dom: 1 -- tristate A latch, 0 -- clear A latch */
-#define   DOM_FPGA_TEST_LOCAL_DOWN_ALATCH  (0x00001000)
-/** for lower dom: 1 -- tristate B latch, 0 -- clear B latch */
-#define   DOM_FPGA_TEST_LOCAL_DOWN_BLATCH  (0x00002000)
-/** for upper dom: 1 -- tristate A latch, 0 -- clear A latch */
-#define   DOM_FPGA_TEST_LOCAL_UP_ALATCH    (0x00004000)
-/** for upper dom: 1 -- tristate B latch, 0 -- clear B latch */
-#define   DOM_FPGA_TEST_LOCAL_UP_BLATCH    (0x00008000)
-/** take data from ATWD 0 */
-#define   DOM_FPGA_TEST_LOCAL_ATWD0        (0x00010000)
-/** take data from ATWD 0 trigger by disc */
-#define   DOM_FPGA_TEST_LOCAL_ATWD0_DISC   (0x00020000)
-/** take data from ATWD 1 */
-#define   DOM_FPGA_TEST_LOCAL_ATWD1        (0x01000000)
-/** take data from ATWD 1 trigger from disc */
-#define   DOM_FPGA_TEST_LOCAL_ATWD1_DISC   (0x02000000)
+/** send a triangle wave out comm dac */
+#define   DOM_FPGA_TEST_COMM_DAC_TRIANGLE (0x00000001)
+/** send a square wave out comm dac */
+#define   DOM_FPGA_TEST_COMM_DAC_SQUARE   (0x00000002)
+/** acquire a comm adc signal */
+#define   DOM_FPGA_TEST_COMM_ADC          (0x00000010)
+/** ??? */
+#define   DOM_FPGA_TEST_COMM_RS_485_TX        (0x00000100)
+/** ??? */
+#define   DOM_FPGA_TEST_COMM_RS_485_RX_ENABLE (0x00000200)
+/** ??? */
+#define   DOM_FPGA_TEST_COMM_RS_485_TX_ENABLE (0x00000400)
+/** ??? */
+#define   DOM_FPGA_TEST_COMM_RS_485_ENABLE    (0x00000800)
+
+
 /*@}*/
 
 /**
- * \defgroup fpga_test_local_status Local Coincidence Status
+ * \defgroup fpga_test_comm_response Communications hardware responses.
  * \ingroup fpga_test_regs
  *
- * \brief We use this register to check on the  local coincidence status.
+ * \brief We use this register to check on the communications status.
  */
 /*@{*/
 /** register addresss */
-#define DOM_FPGA_TEST_LOCAL_STATUS (DOM_FPGA_TEST_BASE + 0x100c)
+#define DOM_FPGA_TEST_COMM_RESPONSE (DOM_FPGA_TEST_BASE + 0x100c)
+
+/** acquisition of a comm adc signal is done */
+#define   DOM_FPGA_TEST_COMM_RESPONSE_ADC_DONE  (0x00000010)
+/** ??? */
+#define   DOM_FPGA_TEST_COMM_RESPONSE_RS_485_RX (0x00000100)
 
 /** read A on lower dom */
 #define   DOM_FPGA_TEST_LOCAL_STATUS_DOWN_A    (0x00000100)
@@ -125,10 +137,6 @@
 #define   DOM_FPGA_TEST_LOCAL_STATUS_UP_B      (0x00004000)
 /** read B bar on upper dom */
 #define   DOM_FPGA_TEST_LOCAL_STATUS_UP_BBAR   (0x00008000)
-/** atwd done collecting? */
-#define   DOM_FPGA_TEST_LOCAL_STATUS_ATWD0     (0x00010000)
-/** take data from ATWD 1 */
-#define   DOM_FPGA_TEST_LOCAL_STATUS_ATWD1     (0x01000000)
 /*@}*/
 
 /**
@@ -156,11 +164,71 @@
 /*@}*/
 
 /**
+ * \defgroup fpga_test_misc Miscellaneous test fpga bits...
+ * \ingroup fpga_test_regs
+ *
+ * \brief flasher_board sits at bits 24-31...
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_MISC (DOM_FPGA_TEST_BASE + 0x1018)
+
+/** switch on local coincidence with dom above */
+#define   DOM_FPGA_TEST_MISC_LOCAL_UP           (0x00000001)
+/** switch on local coincidence with dom below */
+#define   DOM_FPGA_TEST_MISC_LOCAL_DOWN         (0x00000002)
+/** send high pulse to lower dom */
+#define   DOM_FPGA_TEST_MISC_LOCAL_DOWN_HIGH    (0x00000100)
+/** send low pulse to lower dom */
+#define   DOM_FPGA_TEST_MISC_LOCAL_DOWN_LOW     (0x00000200)
+/** send high pulse to upper dom */
+#define   DOM_FPGA_TEST_MISC_LOCAL_UP_HIGH      (0x00000400)
+/** send low pulse to upper dom */
+#define   DOM_FPGA_TEST_MISC_LOCAL_UP_LOW       (0x00000800)
+/** for lower dom: 1 -- tristate A latch, 0 -- clear A latch */
+#define   DOM_FPGA_TEST_MISC_LOCAL_DOWN_ALATCH  (0x00001000)
+/** for lower dom: 1 -- tristate B latch, 0 -- clear B latch */
+#define   DOM_FPGA_TEST_MISC_LOCAL_DOWN_BLATCH  (0x00002000)
+/** for upper dom: 1 -- tristate A latch, 0 -- clear A latch */
+#define   DOM_FPGA_TEST_MISC_LOCAL_UP_ALATCH    (0x00004000)
+/** for upper dom: 1 -- tristate B latch, 0 -- clear B latch */
+#define   DOM_FPGA_TEST_MISC_LOCAL_UP_BLATCH    (0x00008000)
+/** flasher board trigger */
+#define   DOM_FPGA_TEST_MISC_FL_TRIGGER         (0x01000000)
+/** flasher board pre-trigger */
+#define   DOM_FPGA_TEST_MISC_FL_PRE_TRIGGER     (0x04000000)
+/** flasher board tms */
+#define   DOM_FPGA_TEST_MISC_FL_TMS             (0x10000000)
+/** flasher board tck */
+#define   DOM_FPGA_TEST_MISC_FL_TCK             (0x20000000)
+/** flasher board tdi */
+#define   DOM_FPGA_TEST_MISC_FL_TDI             (0x40000000)
+/*@}*/
+
+/**
+ * \defgroup fpga_test_misc_response Miscellaneous responses...
+ * \ingroup fpga_test_regs
+ *
+ * \brief coincidence_disc is bits 8-15
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_MISC_RESPONSE (DOM_FPGA_TEST_BASE + 0x101c)
+
+/** flasher board read */
+#define   DOM_FPGA_TEST_MISC_RESPONSE_FL_ATTN  (0x01000000)
+/** flasher board read */
+#define   DOM_FPGA_TEST_MISC_RESPONSE_FL_TD0   (0x10000000)
+/*@}*/
+
+/**
  * \defgroup fpga_test_hdv_control Control HDV
  * \ingroup fpga_test_regs
  *
  * \brief Control the RS485 tranceiver
  */
+
+
 /*@{*/
 /** register addresss */
 #define DOM_FPGA_TEST_HDV_CONTROL (DOM_FPGA_TEST_BASE + 0x1018)
@@ -169,8 +237,6 @@
 #define DOM_FPGA_TEST_HDV_CONTROL_Rx_ENABLE (0x00000002)
 #define DOM_FPGA_TEST_HDV_PULSE             (0x00000010)
 #define DOM_FPGA_TEST_HDV_AHB_MASTER_TEST   (0x00000100)
-#define DOM_FPGA_TEST_HDV_R2R_TRIANGLE      (0x00010000)
-#define DOM_FPGA_TEST_HDV_R2R_TRIANGLE_FE   (0x00100000)
 /*@}*/
 
 /**
@@ -267,13 +333,16 @@ enum DOMPulserRates {
  * \ingroup fpga_test_regs
  *
  * \brief This register contains control for the
- * dom communications channel.
+ * dom communications channel. bits 8-15 are dudt,
+ * bits, 16-26 are threshold
  */
 /*@{*/
 /** register addresss */
 #define DOM_FPGA_TEST_COM_CTRL (DOM_FPGA_TEST_BASE + 0x1030)
 /** Signal that we're done reading a message from the Rx Fifo */
 #define DOM_FPGA_TEST_COM_CTRL_RX_DONE     0x00000001
+/** Request a reboot from com firmware */
+#define DOM_FPGA_TEST_COM_CTRL_REBOOT_REQUEST     0x00000002
 /*@}*/
 
 /**
@@ -290,7 +359,11 @@ enum DOMPulserRates {
 #define DOM_FPGA_TEST_COM_STATUS_RX_MSG_READY     0x00000001
 /** for debugging hardware... */
 #define DOM_FPGA_TEST_COM_STATUS_RX_READ_EMPTY    0x00000002
-/** for debugging hardware... */
+/** com firmware grants request for reboot */
+#define DOM_FPGA_TEST_COM_STATUS_REBOOT_GRANTED   0x00000004
+/** is the comm firmware available? */
+#define DOM_FPGA_TEST_COM_STATUS_AVAIL            0x00000008
+/** is the comm firmware available? */
 #define DOM_FPGA_TEST_COM_STATUS_RX_WRITE_ALMOST_FULL    0x00000040
 /** for debugging hardware... */
 #define DOM_FPGA_TEST_COM_STATUS_RX_WRITE_FULL    0x00000080
@@ -327,6 +400,31 @@ enum DOMPulserRates {
 /** register addresss */
 #define DOM_FPGA_TEST_COM_RX_DATA (DOM_FPGA_TEST_BASE + 0x103C)
 /*@}*/
+
+/**
+ * \defgroup fpga_test_local_clock_low Low bits of Local clock readout register
+ * \ingroup fpga_test_regs
+ *
+ * \brief This register contains the low 32 bits of the 48 bit local
+ * clock readout register.
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_LOCAL_CLOCK_LOW (DOM_FPGA_TEST_BASE + 0x1040)
+/*@}*/
+
+/**
+ * \defgroup fpga_test_local_clock_high High bits of local clock readout
+ * \ingroup fpga_test_regs
+ *
+ * \brief This register contains the high 32 bits of the 48 bit local
+ * clock readout register.
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_LOCAL_CLOCK_HIGH (DOM_FPGA_TEST_BASE + 0x1044)
+/*@}*/
+
 
 /**
  * \defgroup fpga_test_rom_data ROM Configuration Data

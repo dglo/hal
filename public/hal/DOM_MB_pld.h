@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_pld.h
  *
- * $Revision: 1.11 $
+ * $Revision: 1.17 $
  * $Author: arthur $
- * $Date: 2003-05-02 02:26:01 $
+ * $Date: 2003-07-11 15:02:41 $
  *
  * \b Usage:
  * \code
@@ -230,6 +230,19 @@ halWriteActiveBaseDAC(USHORT value);
  */
 void
 halWritePassiveBaseDAC(USHORT value);
+
+/**
+ * This routine writes a value into the High Voltage Base DAC.
+ * Attempts to 
+ * write values outside the maximum supported by the addressed DAC will 
+ * result in maximum permissible value being written to the selected DAC 
+ * channel.
+ *
+ * \param value   value to write to HV base DAC
+ * \see halReadBaseDAC
+ */
+void
+halWriteBaseDAC(USHORT value);
 
 /**
  * This routine returns the last value written to the specified DAC channel.  
@@ -470,6 +483,22 @@ void
 halUSleep(int us);
 
 /**
+ * read high voltage base serial number
+ *
+ * \return serial number as a string or NULL on error...
+ */
+const char *
+halHVSerial(void);
+
+/**
+ * check to see if fpga is loaded
+ *
+ * \return non-zero if fpga is loaded
+ */
+int 
+halIsFPGALoaded(void);
+
+/**
  * number of dom dac chip select lines...
  */
 #define DOM_HAL_NUM_DAC_CS 4
@@ -609,8 +638,3 @@ typedef enum {
 
 
 #endif
-
-
-
-
-

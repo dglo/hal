@@ -1,6 +1,8 @@
 /**
  * \file hal.c, the cpld dom hal.
  */
+#include <stddef.h>
+
 #include "hal/DOM_MB_hal.h"
 #include "hal/DOM_PLD_regs.h"
 
@@ -28,7 +30,11 @@ static int readLTC1286(void);
 BOOLEAN halIsSimulationPlatform() { return 0; }
 USHORT halGetHalVersion() { return DOM_HAL_VERSION; }
 BOOLEAN halIsConsolePresent() { 
-   return RPLDBIT(UART_STATUS, SERIAL_POWER) != 0; 
+#if defined(CPLD_ADDR)
+   return RPLDBIT(UART_STATUS, SERIAL_POWER) != 0;
+#else
+   return 1;
+#endif
 }
 
 void halSetFlashBoot() {
@@ -107,6 +113,10 @@ void halWriteActiveBaseDAC(USHORT value) {
 void halWritePassiveBaseDAC(USHORT value) {
    writeLTC1451(value);
    baseDAC = value;
+}
+
+void halWriteBaseDAC(USHORT value) {
+   halWriteActiveBaseDAC(value);
 }
 
 USHORT halReadBaseDAC(void) {
@@ -188,85 +198,65 @@ BOOLEAN halSwapFlashChipsState() {
    return RPLDBIT(BOOT_CONTROL, ALTERNATE_FLASH)!=0;
 }
 
-/* system control i/o, we mirror some bits in scratchpad0
+/* system control i/o
  */
 void halEnableBarometer() {
    PLD(SYSTEM_CONTROL) = 
-      PLDBIT(SYSTEM_CONTROL, BAROMETER_ENABLE) |
-      RPLDBIT(SCRATCHPAD0, PS_ENABLE) |
-      RPLDBIT2(SYSTEM_STATUS0, HV_PS_ENABLE, FLASHER_ENABLE);
-   PLD(SCRATCHPAD0) |= PLDBIT(SYSTEM_CONTROL, BAROMETER_ENABLE);
+      PLD(SYSTEM_CONTROL) | PLDBIT(SYSTEM_CONTROL, BAROMETER_ENABLE);
 }
 
 void halDisableBarometer() {
-   PLD(SYSTEM_CONTROL) = 
-      RPLDBIT(SCRATCHPAD0, PS_ENABLE) |
-      RPLDBIT2(SYSTEM_STATUS0, HV_PS_ENABLE, FLASHER_ENABLE);
-   PLD(SCRATCHPAD0) &= ~PLDBIT(SYSTEM_CONTROL, BAROMETER_ENABLE);
+   PLD(SYSTEM_CONTROL) =
+      PLD(SYSTEM_CONTROL) & (~PLDBIT(SYSTEM_CONTROL, BAROMETER_ENABLE));
 }
 
 void halEnablePMT_HV() {
+   /* ltc1257 requires cs0 to be low on power up...
+    */
+   PLD(SPI_CHIP_SELECT1) = 0; 
+ 
    PLD(SYSTEM_CONTROL) = 
-      PLDBIT(SYSTEM_CONTROL, HV_PS_ENABLE) |
-      RPLDBIT2(SCRATCHPAD0, BAROMETER_ENABLE, PS_ENABLE) |
-      RPLDBIT(SYSTEM_STATUS0, FLASHER_ENABLE);
+      PLD(SYSTEM_CONTROL) | PLDBIT(SYSTEM_CONTROL, HV_PS_ENABLE);
+   halUSleep(5000);
+
+   /* chip selects are normally high...
+    */
+   PLD(SPI_CHIP_SELECT1) = PLDBIT2(SPI_CHIP_SELECT1, BASE_CS0, BASE_CS1); 
 }
 
 void halDisablePMT_HV() {
    PLD(SYSTEM_CONTROL) = 
-      PLDBIT(SYSTEM_CONTROL, HV_PS_ENABLE) |
-      RPLDBIT2(SCRATCHPAD0, BAROMETER_ENABLE, PS_ENABLE) |
-      RPLDBIT(SYSTEM_STATUS0, FLASHER_ENABLE);
+      PLD(SYSTEM_CONTROL) & (~PLDBIT(SYSTEM_CONTROL, HV_PS_ENABLE));
 }
 
 void halEnableFlasher() {
    PLD(SYSTEM_CONTROL) = 
-      PLDBIT(SYSTEM_CONTROL, FLASHER_ENABLE) |
-      RPLDBIT2(SCRATCHPAD0, BAROMETER_ENABLE, PS_ENABLE) |
-      RPLDBIT2(SYSTEM_STATUS0, HV_PS_ENABLE, FLASHER_ENABLE);
+      PLD(SYSTEM_CONTROL) | PLDBIT(SYSTEM_CONTROL, FLASHER_ENABLE);
 }
 
 void halDisableFlasher() {
    PLD(SYSTEM_CONTROL) = 
-      RPLDBIT2(SCRATCHPAD0, BAROMETER_ENABLE, PS_ENABLE) |
-      RPLDBIT2(SYSTEM_STATUS0, HV_PS_ENABLE, FLASHER_ENABLE);
+      PLD(SYSTEM_CONTROL) & (~PLDBIT(SYSTEM_CONTROL, FLASHER_ENABLE));
 }
 
-BOOLEAN halFlasherState() { 
+BOOLEAN halFlasherState() {
    return RPLDBIT(SYSTEM_STATUS0, FLASHER_ENABLE)!=0; 
 }
 
 void halEnableLEDPS() {
-   PLD(SYSTEM_CONTROL) = 
-      PLDBIT(SYSTEM_CONTROL, PS_ENABLE) |
-      RPLDBIT(SCRATCHPAD0, BAROMETER_ENABLE) |
-      RPLDBIT2(SYSTEM_STATUS0, HV_PS_ENABLE, FLASHER_ENABLE);
-   PLD(SCRATCHPAD0) |= PLDBIT(SCRATCHPAD0, PS_ENABLE);
 }
 
 void halDisableLEDPS() {
-   PLD(SYSTEM_CONTROL) = 
-      RPLDBIT(SCRATCHPAD0, BAROMETER_ENABLE) |
-      RPLDBIT2(SYSTEM_STATUS0, HV_PS_ENABLE, FLASHER_ENABLE);
-   PLD(SCRATCHPAD0) &= ~PLDBIT(SCRATCHPAD0, PS_ENABLE);
 }
 
 BOOLEAN halLEDPSState() { 
-   return RPLDBIT(SCRATCHPAD0, PS_ENABLE)!=0; 
+   return 0;
 }
 
 void halStepUpLED() {
-   PLD(SYSTEM_CONTROL) = 
-      PLDBIT(SYSTEM_CONTROL, PS_UP) |
-      RPLDBIT2(SCRATCHPAD0, BAROMETER_ENABLE, PS_ENABLE) |
-      RPLDBIT2(SYSTEM_STATUS0, HV_PS_ENABLE, FLASHER_ENABLE);
 }
 
 void halStepDownLED() {
-   PLD(SYSTEM_CONTROL) = 
-      PLDBIT(SYSTEM_CONTROL, PS_DOWN) |
-      RPLDBIT2(SCRATCHPAD0, BAROMETER_ENABLE, PS_ENABLE) |
-      RPLDBIT2(SYSTEM_STATUS0, HV_PS_ENABLE, FLASHER_ENABLE);
 }
 
 BOOLEAN halIsSerialDSR() { return RPLDBIT(UART_STATUS, SERIAL_DSR); }
@@ -278,18 +268,29 @@ BOOLEAN halIsSerialTransmitData() {
 }
 
 void halEnableSerialDSR() {
-   PLD(UART_CONTROL) |= PLDBIT(UART_CONTROL, DSR_CONTROL);
-   PLD(SCRATCHPAD1) |= PLDBIT(SCRATCHPAD1, DSR_ENABLE);
+   PLD(UART_CONTROL) = PLD(UART_CONTROL) | PLDBIT(UART_CONTROL, DSR_CONTROL);
 }
 
 void halDisableSerialDSR() {
-   PLD(UART_CONTROL) &= ~PLDBIT(UART_CONTROL, DSR_CONTROL);
-   PLD(SCRATCHPAD1) &= ~PLDBIT(SCRATCHPAD1, DSR_ENABLE);
+   PLD(UART_CONTROL) = 
+      PLD(UART_CONTROL) & (~PLDBIT(UART_CONTROL, DSR_CONTROL));
 }
 
-BOOLEAN halSerialDSRState() { return RPLDBIT(SCRATCHPAD1, DSR_ENABLE); }
+BOOLEAN halSerialDSRState() { return RPLDBIT(UART_STATUS, SERIAL_DSR); }
 
-void halBoardReboot() { 
+void halBoardReboot() {
+   if (halIsFPGALoaded()) {
+      int i;
+
+      /* FIXME: we need to check _which_ fpga is running, not
+       * assume test...
+       */
+      hal_FPGA_TEST_request_reboot();
+      
+      for (i=0; i<1000 && !hal_FPGA_TEST_is_reboot_granted(); i++) 
+	 halUSleep(10);
+   }
+   
    PLD(REBOOT_CONTROL) = PLDBIT(REBOOT_CONTROL, INITIATE_REBOOT);
 }
 
@@ -769,3 +770,46 @@ static int readLTC1286(void) {
    return ret&0x0fff;
 }
 
+static void ows8(int b) {
+   int i;
+   for (i=0; i<8; i++) {
+      PLD(ONE_WIRE) = ( (b>>i) & 1 ) ? 0x9 : 0xa;
+      halUSleep(100);
+   }
+}
+
+static void waitBusy(void) { while (RPLDBIT(ONE_WIRE, BUSY)) ; }
+
+const char *halHVSerial(void) {
+   int i;
+   const char *hexdigit = "0123456789abcdef";
+   const int sz = 64/4+1;
+   char *t = (char *)malloc(sz);
+   if (t==NULL) return NULL;
+   memset(t, 0, sz);
+
+   PLD(ONE_WIRE) = 0xf;
+   waitBusy();
+
+   for (i=0; i<8; i++) {
+      PLD(ONE_WIRE) = ( (0x33>>i) & 1 ) ? 0x9 : 0xa;
+      waitBusy();
+   }
+
+   for (i=0; i<64; i++) {
+      int j;
+      unsigned chk = 0;
+      PLD(ONE_WIRE) = 0xb;
+      waitBusy();
+      t[i/4]<<=1;
+      if (RPLDBIT(ONE_WIRE, DATA)) {
+	 t[i/4] |= 1;
+      }
+   }
+
+   for (i=0; i<64/4; i++) t[i] = hexdigit[t[i]];
+   
+   return t;
+}
+
+int halIsFPGALoaded(void) { return PLD(FPGA_PLD)==0x55; }
