@@ -110,7 +110,7 @@ USHORT halReadADC(UBYTE channel) {
          sum += max1139Read(channel/12, channel % 12);
       }
    
-      return sum * 2048 / (3300 * n);
+      return sum * 3300 / (2048 * n);
    }
 #else
    return max1139Read(channel/12, channel % 12);
