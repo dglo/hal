@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_fpga.h
  *
- * $Revision: 1.40 $
+ * $Revision: 1.40.2.1 $
  * $Author: arthur $
- * $Date: 2004-10-25 20:39:46 $
+ * $Date: 2004-11-20 00:44:21 $
  *
  * \b Usage:
  * \code
@@ -713,7 +713,7 @@ int hal_FPGA_TEST_set_lc_launch_window(int up_pre_ns,
 /**
  * Enable transmission of LC pulses when SPE disc. fires
  */
-void hal_FPGA_TEST_enable_spe_lc(void);
+void hal_FPGA_TEST_enable_spe_lc(int ena_lo, int ena_hi);
 
 /**
  * Disable transmission of LC pulses when SPE disc. fires
@@ -723,4 +723,5 @@ void hal_FPGA_TEST_disable_spe_lc(void);
 /** 
  * Query whether SPE->LC enable is set
  */
-int hal_FPGA_TEST_spe_lc_enabled(void);
+int hal_FPGA_TEST_spe_lc_enabled(int * ena_lo, int * ena_hi);
+

@@ -156,6 +156,22 @@ void hal_FPGA_TEST_trigger_disc(int trigger_mask) {
    FPGA(TEST_SIGNAL) = clearLaunch() | reg;
 }
 
+void hal_FPGA_TEST_trigger_disc_lc(int trigger_mask) {
+  /** This slightly kludgy reimplementation is required because
+      Thorsten reinterprets TEST_SIGNAL_FADC when LC is enabled. */
+  unsigned reg = 0;
+  if (trigger_mask & HAL_FPGA_TEST_TRIGGER_ATWD0)
+    reg |= FPGABIT(TEST_SIGNAL, ATWD0_DISC);
+  if (trigger_mask & HAL_FPGA_TEST_TRIGGER_ATWD1)
+    reg |= FPGABIT(TEST_SIGNAL, ATWD1_DISC);
+  if (trigger_mask & HAL_FPGA_TEST_TRIGGER_FADC)
+    reg |= FPGABIT(TEST_SIGNAL, FADC);
+
+  reg |= waveformTriggers(trigger_mask);
+
+  FPGA(TEST_SIGNAL) = clearLaunch() | reg;
+}
+
 void hal_FPGA_TEST_trigger_LED(int trigger_mask) {
    unsigned reg = 0;
    if (trigger_mask & HAL_FPGA_TEST_TRIGGER_ATWD0) 
@@ -529,8 +545,10 @@ int hal_FPGA_TEST_atwd1_has_lc(void) {
 #define WINDOW_BITS  6
 #warning fixme TICKTIME_NS defined better somewhere else?
 #define TICKTIME_NS  50
-#define MAXWINDOW    ((1<<WINDOW_BITS)-1)
-#define MAXWINDOW_NS (MAXWINDOW*TICKTIME_NS)
+/** JJ: Thorsten informs me that 0x3F is disallowed, hence -2: */
+#define MAXWINDOW    ((1<<WINDOW_BITS)-2) 
+/** (1<<6 - 2) * 50 = 3100: */
+#define MAXWINDOW_NS (MAXWINDOW*TICKTIME_NS) 
 
 int hal_FPGA_TEST_set_lc_launch_window(int up_pre_ns,
 				       int up_post_ns,
@@ -557,14 +575,26 @@ int hal_FPGA_TEST_set_lc_launch_window(int up_pre_ns,
   return 0;
 }
 
-int hal_FPGA_TEST_spe_lc_enabled(void) {
-  return RFPGABIT(TEST_MISC, LOCAL_SPE) ? 1 : 0;
+int hal_FPGA_TEST_spe_lc_enabled(int * ena_lo, int * ena_hi) {
+  /** If LC enabled, return 1, else 0.  Also, if LC enabled and ena_lo
+      and/or ena_hi are non-null, set them appropriately. */
+  if(! RFPGABIT(TEST_MISC, LOCAL_SPE)) return 0;
+  if(ena_lo) *ena_lo = RFPGABIT(TEST_MISC, LOCAL_RX_LO) ? 1 : 0;
+  if(ena_hi) *ena_hi = RFPGABIT(TEST_MISC, LOCAL_RX_HI) ? 1 : 0;
+  return 1;
 }
 
-void hal_FPGA_TEST_enable_spe_lc(void) {
-  FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, LOCAL_SPE);
+void hal_FPGA_TEST_enable_spe_lc(int ena_lo, int ena_hi) {
+  /** Must set ena_lo and/or ena_hi for this to do anything */
+  if(ena_lo || ena_hi) {
+    FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, LOCAL_SPE);
+    if(ena_lo) FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, LOCAL_RX_LO);
+    if(ena_hi) FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, LOCAL_RX_HI);
+  }
 }
 
 void hal_FPGA_TEST_disable_spe_lc(void) {
   FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_SPE);
+  FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_RX_LO);
+  FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_RX_HI);
 }
