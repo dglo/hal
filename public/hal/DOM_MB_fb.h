@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_fb.h
  *
- * $Revision: 1.4.6.1 $
- * $Author: arthur $
- * $Date: 2004-11-24 19:47:10 $
+ * $Revision: 1.7 $
+ * $Author: jacobsen $
+ * $Date: 2005-01-22 15:42:23 $
  *
  * \b Usage:
  * \code
@@ -160,6 +160,14 @@ hal_FB_set_brightness(UBYTE value);
  */
 void
 hal_FB_enable_LEDs(USHORT enables);
+
+/**
+ * Routine that sets the flasher board rate.
+ * 
+ * \param Rate in Hz
+ */
+void
+hal_FB_set_rate(USHORT rate);
 
 /**
  * Routine that enables the video mux and selects which 

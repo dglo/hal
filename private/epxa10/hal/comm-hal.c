@@ -10,8 +10,6 @@
 #include "hal/DOM_MB_pld.h"
 #include "DOM_FPGA_regs.h"
 
-#include "dom-fpga/fpga-versions.h"
-
 #include "booter/epxa.h"
 
 /* prepended to all packets... */
@@ -871,20 +869,16 @@ static int scanPkts(int aggressive) {
 
 /* look through the retx list for packets that need to
  * be retransmitted...
- *
- * if we _ever_ start to retx, we must stop sending
- * packets until the _entire_ retx queue is drained...
  */
 static int timeoutRetransmit(unsigned ticks) {
    /* retransmit all expired packets... */
    RetxElt *elt;
    const int tooOld = 100; /* 200ms */
    int found = 0;
-
-   do {
-      for (elt=retxTail; elt!=NULL; elt=elt->next) {
-         unsigned *pkt = elt->pkt;
-         const int dt = (int) ticks - (int) elt->ticks;
+   
+   for (elt=retxTail; elt!=NULL; elt=elt->next) {
+      unsigned *pkt = elt->pkt;
+      const int dt = (int) ticks - (int) elt->ticks;
 
 #if defined(DEBUGSERIAL) && 0
          {  char msg[80];
@@ -894,33 +888,28 @@ static int timeoutRetransmit(unsigned ticks) {
          }
 #endif
       
-         if (pkt!=NULL && dt > tooOld) {
-            const unsigned h = *pkt;
+      if (pkt!=NULL && dt > tooOld) {
+         const unsigned h = *pkt;
+   
+         found = 1;
 
 #if defined(DEBUGSERIAL)
-            {  char msg[80];
-               snprintf(msg, sizeof(msg),
-                        "retx: seqn: %hu", pktSeqn(h));
-               writeDebug(msg);
-            }
-#endif
-            /* don't go on if there is no space in tx... */
-            if (!isHWPktSpace(h)) break;
-            
-            /* mark the time again and resend... */
-            found = 1;
-            elt->ticks = getTicks();
-            hal_FPGA_hwsend(pkt);
-            domStatsPkt.nTxPkts++;
-            domStatsPkt.nTxResentPkts++;
+         {  char msg[80];
+            snprintf(msg, sizeof(msg),
+                     "retx: seqn: %hu", pktSeqn(h));
+            writeDebug(msg);
          }
+#endif
+         /* don't go on if there is no space in tx... */
+         if (!isHWPktSpace(h)) break;
+
+         /* mark the time again and resend... */
+         elt->ticks = getTicks();
+         hal_FPGA_hwsend(pkt);
+         domStatsPkt.nTxPkts++;
+         domStatsPkt.nTxResentPkts++;
       }
-      if (found) {
-         /* try to clear these guys out... */
-         scanPkts(1);
-         ticks = getTicks();
-      }
-   } while (found && retxTail!=NULL);
+   }
 
    return found;
 }
