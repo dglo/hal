@@ -248,12 +248,12 @@ hal_FPGA_query_versions(DOM_HAL_FPGA_TYPES type, unsigned comps) {
 }
 
 int hal_FPGA_query_build(void) { 
-   const short *rom = (const short *) DOM_FPGA_VERSIONING;
+   const unsigned *rom = (const unsigned *) DOM_FPGA_VERSIONING;
    return rom[1] | rom[2]<<16;
 }
 
 DOM_HAL_FPGA_TYPES hal_FPGA_query_type(void) { 
-   const short *rom = (const short *) DOM_FPGA_VERSIONING;
+   const unsigned *rom = (const unsigned *) DOM_FPGA_VERSIONING;
 
    if (rom[0]==FPGA_VERSIONS_TYPE_STF_COM) {
       return DOM_HAL_FPGA_TYPE_STF_COM;
