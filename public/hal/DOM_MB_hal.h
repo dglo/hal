@@ -56,13 +56,15 @@
  * \section capvec Capability Vector
  * TBD
  */
-
+#ifndef DOM_MB_HAL_INCLUDE
+#define DOM_MB_HAL_INCLUDE
 
 /**
  * \file DOM_MB_hal.h
  * 
  * DOM main board hardware access library interface
  */
+#include "DOM_MB_types.h"
 
 /** 
  * \brief isSimulationPlatform
@@ -218,10 +220,10 @@ readADC(UBYTE channel);
  * library.
  *
  * Usage
- *\code
+ * \code
 #include <DOM_MB_types.h>
 #include <DOM_MB_hal.h>
- *\endcode
+ * \endcode
  *
  * Errors: Requests to write a value to an undefined DAC channel will result in no 
  * action taken.  No error indication will be given.
@@ -242,7 +244,7 @@ writeDAC(UBYTE channel, USHORT value);
  * \code
 #include <DOM_MB_types.h>
 #include <DOM_MB_hal.h>
- *\endcode
+ * \endcode
  *
  * Errors: Attempts to read back DAC values from undefined channels will return a 
  * value of 0.  No other error indication will be returned.
@@ -263,7 +265,7 @@ ReadDAC(UBYTE channel);
  * \code
 #include <DOM_MB_types.h>
 #include <DOM_MB_hal.h>
- *\endcode
+ * \endcode
  *
  * \see disableBarometer
  */
@@ -279,7 +281,7 @@ enableBarometer();
  *\code
 #include <DOM_MB_types.h>
 #include <DOM_MB_hal.h>
- *\endcode
+ * \endcode
  *
  * Errors: When powered down, readout values from this sensor are undefined.
  *
@@ -298,10 +300,10 @@ disableBarometer();
  *\code
 #include <DOM_MB_types.h>
 #include <DOM_MB_hal.h>
- *\endcode
+ * \endcode
  *
  */
-UnsigneShort
+USHORT
 readTemp();
 
 /**
@@ -315,7 +317,7 @@ readTemp();
  *\code
 #include <DOM_MB_types.h>
 #include <DOM_MB_hal.h>
- *\endcode
+ * \endcode
  *
  * \see disablePMT_HV
  * \see setPMT_HV
@@ -334,7 +336,7 @@ enablePMT_HV();
  *\code
 #include <DOM_MB_types.h>
 #include <DOM_MB_hal.h>
- *\endcode
+ * \endcode
  *
  * \see enablePMT_HV
  * \see setPMT_HV
@@ -365,7 +367,7 @@ disablePMT_HV();
  * \see disablePMT_HV
  * \see readPMT_HV
  */
-USHORT
+void
 setPMT_HV(USHORT value);
 
 /** 
@@ -407,3 +409,9 @@ readPMT_HV();
 void
 selectAnalogMuxInput(UBYTE channel);
 
+/**
+ * \brief number of dom dac channels
+ */
+#define DOM_DAC_CHANNELS 12
+
+#endif
