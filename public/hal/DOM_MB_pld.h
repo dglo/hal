@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_pld.h
  *
- * $Revision: 1.28 $
+ * $Revision: 1.28.2.1 $
  * $Author: arthur $
- * $Date: 2004-03-23 19:58:11 $
+ * $Date: 2004-05-21 17:03:05 $
  *
  * \b Usage:
  * \code
@@ -357,10 +357,48 @@ void
 halDisableBarometer(void);
 
 /**
+ * This routine prepares to read a value from the DOM MB mounted 
+ * temperature sensor.  This routine requires a matched call to
+ * halFinishReadTemp.
+ *
+ * \see halReadTemp
+ * \see halFinishReadTemp
+ */
+void
+halStartReadTemp(void);
+
+/**
+ * This routine checks to see if a previous call to halStartReadTemp
+ * had returned a value to the temperature sensor.
+ *
+ * \see halReadTemp
+ * \see halStartReadTemp
+ * \see halFinishReadTemp
+ */
+int
+halReadTempDone(void);
+
+/**
  * This routine reads a value from the DOM MB mounted temperature sensor.  
  * Calibration and interpretation of return values is not defined in this 
- * document.
+ * document.  This routine must be called after halStartReadTemp.  Normally,
+ * one would use halReadTemp to readout the temperature sensor.
  *
+ * \see halStartReadTemp
+ * \see halReadTemp
+ */
+USHORT
+halFinishReadTemp(void);
+
+/**
+ * This routine reads a value from the DOM MB mounted temperature sensor.  
+ * Calibration and interpretation of return values is not defined in this 
+ * document.  This routine is equivalent to:
+ * halStartReadTemp();
+ * halFinishReadTemp();
+ *
+ * \see halStartReadTemp
+ * \see halFinishReadTemp
  */
 USHORT
 halReadTemp(void);

@@ -171,7 +171,7 @@ USHORT halReadDAC(UBYTE channel) {
    return daclookup[channel];
 }
 
-USHORT halReadTemp(void) { 
+void halStartReadTemp(void) {
    static int chk = 1;
    
    if (chk) {
@@ -197,12 +197,18 @@ USHORT halReadTemp(void) {
     * mode for power savings)...
     */
    convertDS1631();
+}
 
-   /* wait for conversion done bit...
-    */
-   while ((readDS1631Config()&0x80) == 0) ;
+int halReadTempDone(void) { return (readDS1631Config()&0x80) != 0; }
 
+USHORT halFinishReadTemp(void) {
+   while (!halReadTempDone()) ;
    return readDS1631Temp();
+}
+
+USHORT halReadTemp(void) { 
+   halStartReadTemp();
+   return halFinishReadTemp();
 }
 
 static UBYTE muxlookup;
