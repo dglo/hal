@@ -66,9 +66,9 @@
 /**
  * \file DOM_MB_hal.h
  *
- * $Revision: 1.12 $
- * $Author: arthur $
- * $Date: 2003-01-24 21:37:54 $
+ * $Revision: 1.13 $
+ * $Author: jkelley $
+ * $Date: 2004-03-10 23:40:08 $
  *
  * \b Usage:
  * \code
@@ -80,5 +80,6 @@
  */
 #include "hal/DOM_MB_pld.h"
 #include "hal/DOM_MB_fpga.h"
+#include "hal/DOM_MB_fb.h"
 
 #endif

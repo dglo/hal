@@ -37,9 +37,18 @@ USHORT halGetHWVersion(void) { return PLD(API_LOW)|(PLD(API_HIGH)<<8); }
 USHORT halGetBuild(void) { return PLD_VERSION_BUILD_NUM; }
 USHORT halGetHWBuild(void) { return PLD(BUILD_LOW)|(PLD(BUILD_HIGH)<<8); }
 
+static int quickHack() {
+#if defined(CPLD_ADDR)
+   volatile unsigned char *p = (volatile unsigned char *) 0x50000009;
+   return *p & 0x80;
+#else
+   return 0;
+#endif
+}
+
 BOOLEAN halIsConsolePresent() { 
 #if defined(CPLD_ADDR)
-   return RPLDBIT(UART_STATUS, SERIAL_POWER) != 0;
+   return !quickHack() && RPLDBIT(UART_STATUS, SERIAL_POWER) != 0;
 #else
    return 1;
 #endif
@@ -60,6 +69,14 @@ BOOLEAN halFlashBootState() {
 }
 
 USHORT halReadBaseADC(void) { return readLTC1286(); }
+
+void halDisableBaseHV(void) {
+   PLD(MISC) = PLD(MISC) | PLDBIT(MISC, BASE_HV_DISABLE);
+}
+
+void halEnableBaseHV(void) {
+   PLD(MISC) = PLD(MISC) & ~PLDBIT(MISC, BASE_HV_DISABLE);
+}
 
 USHORT halReadADC(UBYTE channel) {
    return max1139Read(channel/12, channel % 12);
@@ -146,7 +163,6 @@ USHORT halReadDAC(UBYTE channel) {
    return daclookup[channel];
 }
 
-
 USHORT halReadTemp(void) { 
    static int chk = 1;
    
@@ -181,17 +197,6 @@ USHORT halReadTemp(void) {
    return readDS1631Temp();
 }
 
-
-static USHORT pmtlookup;
-
-void halSetPMT_HV(USHORT value) { 
-   pmtlookup = value; 
-}
-
-USHORT halReadPMT_HV() { 
-   return pmtlookup;
-}
-
 static UBYTE muxlookup;
 
 void halSelectAnalogMuxInput(UBYTE chan) {
@@ -202,57 +207,71 @@ void halSelectAnalogMuxInput(UBYTE chan) {
    PLD(MUX_CONTROL) = cs | (addr<<2);
 }
 
-void halSetSwapFlashChips() {
+void halSetSwapFlashChips(void) {
    PLD(BOOT_CONTROL) = 
       PLDBIT(BOOT_CONTROL, ALTERNATE_FLASH) |
       RPLDBIT(BOOT_STATUS, BOOT_FROM_FLASH);
 }
 
-void halClrSwapFlashChips() {
+void halClrSwapFlashChips(void) {
    PLD(BOOT_CONTROL) = RPLDBIT(BOOT_STATUS, BOOT_FROM_FLASH);
 }
 
-BOOLEAN halSwapFlashChipsState() {
+BOOLEAN halSwapFlashChipsState(void) {
    return RPLDBIT(BOOT_CONTROL, ALTERNATE_FLASH)!=0;
 }
 
 /* system control i/o
  */
-void halEnableBarometer() {
+void halEnableBarometer(void) {
    PLD(SYSTEM_CONTROL) = 
       PLD(SYSTEM_CONTROL) | PLDBIT(SYSTEM_CONTROL, BAROMETER_ENABLE);
 }
 
-void halDisableBarometer() {
+void halDisableBarometer(void) {
    PLD(SYSTEM_CONTROL) =
       PLD(SYSTEM_CONTROL) & (~PLDBIT(SYSTEM_CONTROL, BAROMETER_ENABLE));
 }
 
-void halEnablePMT_HV() {
+void halPowerUpBase(void) {
    /* ltc1257 requires cs0 to be low on power up...
     */
    PLD(SPI_CHIP_SELECT1) = 0; 
+
+   /* disable must be low when powering on... */
+   halEnableBaseHV();
  
    PLD(SYSTEM_CONTROL) = 
       PLD(SYSTEM_CONTROL) | PLDBIT(SYSTEM_CONTROL, HV_PS_ENABLE);
    halUSleep(5000);
+
+   /* DAC -> zero */
+   halWriteBaseDAC(0);
+
+   /* after 500ms disable goes high... */
+   halUSleep(495000);
+   halDisableBaseHV();
 
    /* chip selects are normally high...
     */
    PLD(SPI_CHIP_SELECT1) = PLDBIT2(SPI_CHIP_SELECT1, BASE_CS0, BASE_CS1); 
 }
 
-void halDisablePMT_HV() {
+void halPowerDownBase(void) {
+   /* drop disable */
+   halEnableBaseHV();
+   
+   /* drop power */
    PLD(SYSTEM_CONTROL) = 
       PLD(SYSTEM_CONTROL) & (~PLDBIT(SYSTEM_CONTROL, HV_PS_ENABLE));
 }
 
-void halEnableFlasher() {
+void halEnableFlasher(void) {
    PLD(SYSTEM_CONTROL) = 
       PLD(SYSTEM_CONTROL) | PLDBIT(SYSTEM_CONTROL, FLASHER_ENABLE);
 }
 
-void halDisableFlasher() {
+void halDisableFlasher(void) {
    PLD(SYSTEM_CONTROL) = 
       PLD(SYSTEM_CONTROL) & (~PLDBIT(SYSTEM_CONTROL, FLASHER_ENABLE));
 }
@@ -262,20 +281,21 @@ BOOLEAN halFlasherState() {
 }
 
 void halEnableLEDPS() {
+   PLD(SYSTEM_CONTROL) =
+      PLD(SYSTEM_CONTROL) | PLDBIT(SYSTEM_CONTROL, SINGLE_LED_ENABLE);
 }
 
 void halDisableLEDPS() {
+   PLD(SYSTEM_CONTROL) =
+      PLD(SYSTEM_CONTROL) & (~PLDBIT(SYSTEM_CONTROL, SINGLE_LED_ENABLE));
 }
 
-BOOLEAN halLEDPSState() { 
-   return 0;
+BOOLEAN halLEDPSState() {
+   return (PLD(SYSTEM_CONTROL) & PLDBIT(SYSTEM_CONTROL, SINGLE_LED_ENABLE))!=0;
 }
 
-void halStepUpLED() {
-}
-
-void halStepDownLED() {
-}
+void halStepUpLED() {}
+void halStepDownLED() {}
 
 BOOLEAN halIsSerialDSR() { return RPLDBIT(UART_STATUS, SERIAL_DSR); }
 BOOLEAN halIsSerialReceiveData() { 
@@ -308,15 +328,57 @@ void halBoardReboot() {
    PLD(REBOOT_CONTROL) = PLDBIT(REBOOT_CONTROL, INITIATE_REBOOT);
 }
 
-const char *halGetBoardID(void) {
-   static char id[256];
+static unsigned short crc16Once(unsigned short crcval, unsigned char cval) {
+   int i;
+   const unsigned short poly16 = 0x1021;
+   crcval ^= cval << 8;
+   for (i = 8; i--; )
+      crcval = crcval & 0x8000 ? (crcval << 1) ^ poly16 : crcval << 1;
+   return crcval;
+}
+
+static unsigned crc32Once(unsigned crcval, unsigned char cval) {
+   int i;
+   const unsigned poly32 = 0x04C11DB7;
+   crcval ^= cval << 24;
+   for (i = 8; i--; )
+      crcval = crcval & 0x80000000 ? (crcval << 1) ^ poly32 : crcval << 1;
+   return crcval;
+}
+
+static unsigned short crc16(unsigned char *b, int n) {
+   int i;
+   unsigned short crc = 0;
+   for (i=0; i<n; i++) crc = crc16Once(crc, b[i]);
+   return crc;
+}
+
+static unsigned crc32(unsigned char *b, int n) {
+   int i;
+   unsigned crc = 0;
+   for (i=0; i<n; i++) crc = crc32Once(crc, b[i]);
+   return crc;
+}
+
+/* translate 64 bit unique id -> 48 bit psuedo unique id... */
+static unsigned long long translateID(unsigned long long id) {
+   unsigned long long nid = crc32((unsigned char *) &id, 8);
+   nid<<=16;
+   nid |= crc16((unsigned char *) &id, 8);
+   return nid;
+}
+
+unsigned long long halGetBoardIDRaw(void) {
    static char isInit = 0;
+   static unsigned long long id;
 
    if (!isInit) {
       int i;
       volatile unsigned short *flash = 
 	 (volatile unsigned short *) (0x41400000);
 
+      id = 0;
+      
       /* read configuration register...
        */
       *flash = 0x90;
@@ -324,13 +386,13 @@ const char *halGetBoardID(void) {
       /* get the protection register contents and cat them to id...
        */
       for (i=0; i<4; i++) {
-	 const char *digit = "0123456789abcdef";
 	 const unsigned short pr = *(flash + (0x81+i));
-	 id[i*4] = digit[(pr>>12)&0xf];
-	 id[i*4+1] = digit[(pr>>8)&0xf];
-	 id[i*4+2] = digit[(pr>>4)&0xf];
-	 id[i*4+3] = digit[(pr)&0xf];
+         id <<= 16;
+         id |= pr;
       }
+
+      /* hash the 64 bit number... */
+      id = translateID(id);
 
       /* back to read-array mode... */
       *flash = 0xff;
@@ -338,10 +400,30 @@ const char *halGetBoardID(void) {
       /* we're initialized... */
       isInit = 1;
    }
-   /* throw away top 4 bytes -- vendor code... */
-   return id + 4;
+   return id;
 }
 
+const char *halGetBoardID(void) {
+   static char id[256];
+   static int isInit = 0;
+   if (!isInit) {
+#if 0
+      /* doesn't seem to be supported in newlib!?! (tried llx too) */
+      snprintf(id, sizeof(id), "%012Lx", halGetBoardIDRaw());
+#else
+      int shift = 44, i = 0;
+      const unsigned long long bid = halGetBoardIDRaw();
+      while (shift>=0) {
+         const char *digit = "0123456789abcdef";
+         id[i] = digit[(bid>>shift)&0xf];
+         shift -= 4;
+         i++;
+      }
+#endif
+      isInit = 1;
+   }
+   return id;
+}
 
 /*
  * FIXME for Gerry:
@@ -795,6 +877,8 @@ static void ows8(int b) {
 
 static void waitBusy(void) { while (RPLDBIT(ONE_WIRE, BUSY)) ; }
 
+/* use halHVSerialRaw (when it's ready)...
+ */
 const char *halHVSerial(void) {
    int i;
    const char *hexdigit = "0123456789abcdef";
@@ -823,6 +907,34 @@ const char *halHVSerial(void) {
    for (i=0; i<64/4; i++) t[i] = hexdigit[(int)t[i]];
    
    return t;
+}
+
+unsigned long long halHVSerialRaw(void) {
+   static unsigned long long id;
+   static int isInit = 0;
+   
+   if (!isInit) {
+      int i;
+
+      PLD(ONE_WIRE) = 0xf;
+      waitBusy();
+
+      for (i=0; i<8; i++) {
+         PLD(ONE_WIRE) = ( (0x33>>i) & 1 ) ? 0x9 : 0xa;
+         waitBusy();
+      }
+      
+      id = 0;
+      for (i=0; i<64; i++) {
+         id<<=1;
+         PLD(ONE_WIRE) = 0xb;
+         if (RPLDBIT(ONE_WIRE, DATA)) id |= 1;
+      }
+      
+      isInit = 1;
+   }
+   
+   return id;
 }
 
 int halIsFPGALoaded(void) { return RPLDBIT(MISC, FPGA_LOADED)==0; }
@@ -982,6 +1094,11 @@ static int max1139Read(int cs, int ch) {
    return val;
 }
 
+int halIsInputData(void) {
+   if (halIsConsolePresent()) {
+      return (*(volatile int *)(REGISTERS + 0x280))&0x1f;
+   }
 
-
+   return hal_FPGA_TEST_msg_ready();
+}
 

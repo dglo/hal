@@ -3,12 +3,16 @@
  */
 #include <stddef.h>
 #include <stdio.h>
+#include <math.h>
+#include <string.h>
 
 #include "hal/DOM_MB_fpga.h"
 #include "hal/DOM_MB_pld.h"
 #include "DOM_FPGA_regs.h"
 
 #include "dom-fpga/fpga-versions.h"
+
+#include "booter/epxa.h"
 
 /* Global for ping-pong mode management */
 static short g_atwd_ping_pong = 0;
@@ -45,6 +49,7 @@ static unsigned clearLaunch() {
       ~(DOM_FPGA_TEST_SIGNAL_FADC|DOM_FPGA_TEST_SIGNAL_FADC_DISC|
 	DOM_FPGA_TEST_SIGNAL_ATWD0|DOM_FPGA_TEST_SIGNAL_ATWD0_DISC|
 	DOM_FPGA_TEST_SIGNAL_ATWD1|DOM_FPGA_TEST_SIGNAL_ATWD1_DISC|
+    DOM_FPGA_TEST_SIGNAL_ATWD0_LED|DOM_FPGA_TEST_SIGNAL_ATWD1_LED|
 	DOM_FPGA_TEST_SIGNAL_ATWD_PING_PONG);
 }
 
@@ -151,56 +156,18 @@ void hal_FPGA_TEST_trigger_disc(int trigger_mask) {
    FPGA(TEST_SIGNAL) = clearLaunch() | reg;
 }
 
-int hal_FPGA_TEST_send(int type, int len, const char *msg) {
-   int i;
+void hal_FPGA_TEST_trigger_LED(int trigger_mask) {
+   unsigned reg = 0;
+   if (trigger_mask & HAL_FPGA_TEST_TRIGGER_ATWD0) 
+      reg |= FPGABIT(TEST_SIGNAL, ATWD0_LED);
+   if (trigger_mask & HAL_FPGA_TEST_TRIGGER_ATWD1) 
+      reg |= FPGABIT(TEST_SIGNAL, ATWD1_LED);
+   if (trigger_mask & HAL_FPGA_TEST_TRIGGER_FADC) 
+      reg |= FPGABIT(TEST_SIGNAL, FADC_DISC);
 
-   if (len>4096) return 1;
-   
-   /* wait for comm to become avail... */
-   while (!RFPGABIT(TEST_COM_STATUS, AVAIL)) ;
+   reg |= waveformTriggers(trigger_mask);
 
-   /* wait for Tx fifo almost full to be low */
-   while (RFPGABIT(TEST_COM_STATUS, TX_FIFO_ALMOST_FULL)) ;
-   
-   /* send data */
-   FPGA(TEST_COM_TX_DATA) = type&0xff; 
-   FPGA(TEST_COM_TX_DATA) = (type>>8)&0xff;  
-   FPGA(TEST_COM_TX_DATA) = len&0xff; 
-   FPGA(TEST_COM_TX_DATA) = (len>>8)&0xff; 
-
-   for (i=0; i<len; i++) FPGA(TEST_COM_TX_DATA) = msg[i];
-
-   return 0;
-}
-
-int hal_FPGA_TEST_msg_ready(void) {
-   return RFPGABIT(TEST_COM_STATUS, RX_MSG_READY);
-}
-
-int hal_FPGA_TEST_receive(int *type, int *len, char *msg) {
-   int i;
-   unsigned bytes[2];
-   unsigned reg;
-
-   /* wait for msg */
-   while (!hal_FPGA_TEST_msg_ready()) ;
-
-   /* read it */
-   bytes[0] = FPGA(TEST_COM_RX_DATA)&0xff;
-   bytes[1] = FPGA(TEST_COM_RX_DATA)&0xff;
-   *type = (bytes[1]<<8) | bytes[0];
-
-   bytes[0] = FPGA(TEST_COM_RX_DATA)&0xff;
-   bytes[1] = FPGA(TEST_COM_RX_DATA)&0xff;
-   *len = (bytes[1]<<8) | bytes[0];
-   
-   for (i=0; i<*len; i++) msg[i] = FPGA(TEST_COM_RX_DATA)&0xff;
-
-   reg = FPGA(TEST_COM_CTRL);
-   FPGA(TEST_COM_CTRL) = reg | FPGABIT(TEST_COM_CTRL, RX_DONE);
-   FPGA(TEST_COM_CTRL) = reg & (~FPGABIT(TEST_COM_CTRL, RX_DONE));
-
-   return 0;
+   FPGA(TEST_SIGNAL) = clearLaunch() | reg;
 }
 
 static int chkcomp(int mask, unsigned comps, 
@@ -209,8 +176,10 @@ static int chkcomp(int mask, unsigned comps,
    const unsigned *rom = (const unsigned *) DOM_FPGA_VERSIONING;
    if (comps&cmp) {
       if (rom[val]!=expected_versions[rom[0]][val]) {
+#if 0
 	 printf("val: %d, rom: %d, exp: %d\r\n", val, rom[val],
 		expected_versions[rom[0]][val]);
+#endif
 	 mask|=cmp;
       }
    }
@@ -220,7 +189,7 @@ static int chkcomp(int mask, unsigned comps,
 int
 hal_FPGA_query_versions(DOM_HAL_FPGA_TYPES type, unsigned comps) { 
    const unsigned *rom = (const unsigned *) DOM_FPGA_VERSIONING;
-   int mask = 0, i;
+   int mask = 0;
 
    /** Config boot fpga */
    if (type==DOM_HAL_FPGA_TYPE_CONFIG) {
@@ -235,7 +204,7 @@ hal_FPGA_query_versions(DOM_HAL_FPGA_TYPES type, unsigned comps) {
    else if (type==DOM_HAL_FPGA_TYPE_STF_COM) {
       if (rom[0]!=FPGA_VERSIONS_TYPE_STF_COM) return -1;
    }
-   else if (type==DOM_HAL_FPGA_DOMAPP) {
+   else if (type==DOM_HAL_FPGA_TYPE_DOMAPP) {
       if (rom[0]!=FPGA_VERSIONS_TYPE_DOMAPP) return -1;
    }
    else {
@@ -281,6 +250,28 @@ hal_FPGA_query_versions(DOM_HAL_FPGA_TYPES type, unsigned comps) {
 int hal_FPGA_query_build(void) { 
    const short *rom = (const short *) DOM_FPGA_VERSIONING;
    return rom[1] | rom[2]<<16;
+}
+
+DOM_HAL_FPGA_TYPES hal_FPGA_query_type(void) { 
+   const short *rom = (const short *) DOM_FPGA_VERSIONING;
+
+   if (rom[0]==FPGA_VERSIONS_TYPE_STF_COM) {
+      return DOM_HAL_FPGA_TYPE_STF_COM;
+   }
+   else if (rom[0]==FPGA_VERSIONS_TYPE_DOMAPP) {
+      return DOM_HAL_FPGA_TYPE_DOMAPP;
+   }
+   else if (rom[0]==FPGA_VERSIONS_TYPE_CONFIGBOOT) {
+      return DOM_HAL_FPGA_TYPE_CONFIG;
+   }
+   else if (rom[0]==FPGA_VERSIONS_TYPE_ICEBOOT) {
+      return DOM_HAL_FPGA_TYPE_ICEBOOT;
+   }
+   else if (rom[0]==FPGA_VERSIONS_TYPE_STF_NOCOM) {
+      return DOM_HAL_FPGA_TYPE_STF_NOCOM;
+   }
+   
+   return DOM_HAL_FPGA_TYPE_INVALID;
 }
 
 void
@@ -413,6 +404,27 @@ void hal_FPGA_TEST_disable_pulser(void) {
    FPGA(TEST_SIGNAL) = FPGA(TEST_SIGNAL) & ~FPGABIT(TEST_SIGNAL, FE_PULSER);
 }
 
+void hal_FPGA_TEST_enable_LED(void) {
+   FPGA(TEST_SIGNAL) = FPGA(TEST_SIGNAL) | FPGABIT(TEST_SIGNAL, LED_PULSER);
+}
+
+void hal_FPGA_TEST_disable_LED(void) {
+   FPGA(TEST_SIGNAL) = FPGA(TEST_SIGNAL) & ~FPGABIT(TEST_SIGNAL, LED_PULSER);
+}
+
+void hal_FPGA_TEST_set_atwd_LED_delay(int delay) {
+    /* Only low 4 bits used */
+    FPGA(TEST_LED_ATWD_DELAY) = (delay & 0xf);
+}
+
+void hal_FPGA_TEST_start_FB_flashing(void) {
+    FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, FL_TRIGGER);
+}
+
+void hal_FPGA_TEST_stop_FB_flashing(void) {
+    FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, FL_TRIGGER);
+}
+
 void hal_FPGA_TEST_request_reboot(void) { 
    int i;
    unsigned reg = FPGA(TEST_COM_CTRL);
@@ -436,3 +448,45 @@ int hal_FPGA_TEST_is_comm_avail(void) {
 void hal_FPGA_TEST_clear_trigger(void) {
    clearLaunch();
 }
+
+void hal_FPGA_TEST_init_state(void) {
+   FPGA(TEST_SIGNAL) = 0;
+   FPGA(TEST_COMM) = 0;
+   FPGA(TEST_SINGLE_SPE_RATE) = 0;
+   FPGA(TEST_MULTIPLE_SPE_RATE) = 0;
+   FPGA(TEST_MISC) = 0;
+   FPGA(TEST_HDV_CONTROL) = 0;
+   FPGA(TEST_SINGLE_SPE_RATE_FPGA) = 0;
+   FPGA(TEST_MULTIPLE_SPE_RATE_FPGA) = 0;
+   FPGA(TEST_AHB_MASTER_TEST) = DOMPulserRate78k;
+   /* FPGA(TEST_COM_CTRL) = ; better to not mess with this one */
+   FPGA(TEST_LED_ATWD_DELAY) = 0;
+}
+
+void hal_FPGA_TEST_set_scalar_period(DOM_HAL_FPGA_SCALAR_PERIODS ms) {
+   if (ms==DOM_HAL_FPGA_SCALAR_10MS) {
+      FPGA(TEST_LED_ATWD_DELAY) = 
+         FPGA(TEST_LED_ATWD_DELAY) | FPGABIT(TEST_LED_ATWD_DELAY, FAST_SCALAR);
+   }
+   else if (ms==DOM_HAL_FPGA_SCALAR_100MS) {
+      FPGA(TEST_LED_ATWD_DELAY) = 
+         FPGA(TEST_LED_ATWD_DELAY) & 
+         ~FPGABIT(TEST_LED_ATWD_DELAY, FAST_SCALAR);
+   }
+}
+
+void hal_FPGA_TEST_set_deadtime(int ns) {
+   /*  50 -> 0 */
+   /* 100 -> 1 */
+   /* 200 -> 2 */
+   /* 400 -> 3 */
+   /* 800 -> 4 */
+   /* 50 * (2^i) = ns => ns / 50 = (2^i) => log2(ns/50) = i */
+   /* log2(a) = log(a)/log(2) */
+   int i = (int) (log(ns/50.0)/log(2.0));
+   if (i<0) i=0;
+   if (i>15) i=15;
+   FPGA(TEST_LED_ATWD_DELAY) = 
+      (FPGA(TEST_LED_ATWD_DELAY) & (~0xf000)) | (i<<12);
+}
+

@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_pld.h
  *
- * $Revision: 1.20 $
+ * $Revision: 1.25 $
  * $Author: arthur $
- * $Date: 2003-10-31 17:38:33 $
+ * $Date: 2004-03-15 22:59:11 $
  *
  * \b Usage:
  * \code
@@ -29,7 +29,7 @@
  *
  */
 BOOLEAN
-halIsSimulationPlatform();
+halIsSimulationPlatform(void);
 
 /**
  * This routine returns the version number of the firmware at the time
@@ -289,6 +289,28 @@ void
 halWriteBaseDAC(USHORT value);
 
 /**
+ * This routine enables the high voltage on the base.  This
+ * is a separate enable from the ability to enable the base power
+ * supply.
+ *
+ * \see halEnableBaseHV
+ */
+void
+halDisableBaseHV(void);
+
+/**
+ * This routine disables the high voltage on the base.  This
+ * is a separate enable from the ability to enable the base power
+ * supply.
+ *
+ * \see halDisableBaseHV
+ * \see halPowerUpBase
+ * \see halPowerDownBase
+ */
+void
+halEnableBaseHV(void);
+
+/**
  * This routine returns the last value written to the specified DAC channel.  
  * Since no DACs support read back of set values, the returned value comes 
  * from local storage within the hal library.
@@ -321,7 +343,7 @@ halReadBaseDAC(void);
  * \see halDisableBarometer
  */
 void
-halEnableBarometer();
+halEnableBarometer(void);
 
 /**
  * This routine removes power from the analog barometer sensor located on 
@@ -332,7 +354,7 @@ halEnableBarometer();
  * \see halEnableBarometer
  */
 void
-halDisableBarometer();
+halDisableBarometer(void);
 
 /**
  * This routine reads a value from the DOM MB mounted temperature sensor.  
@@ -341,32 +363,37 @@ halDisableBarometer();
  *
  */
 USHORT
-halReadTemp();
+halReadTemp(void);
 
 /**
  * This routine enables operation of the PMT high voltage power supply.  
  * Detailed behavior of the high voltage power supply is defined elsewhere.  
  * But, no voltage will be supplied to the PMT unless the power supply has 
- * been enabled.
+ * been enabled.  By default, the base output voltage is disabled, it can
+ * be enabled with halEnableBaseHV
  *
- * \see halDisablePMT_HV
- * \see halSetPMT_HV
- * \see halReadPMT_HV
+ * \see halPowerDownBase
+ * \see halWriteBaseDAC
+ * \see halReadBaseADC
+ * \see halDisableBaseHV
+ * \see halEnableBaseHV
  */
 void
-halEnablePMT_HV();
+halPowerUpBase(void);
 
 /**
  * This routine disables operation of the PMT high voltage power supply.  
  * Detailed descriptions of high voltage power supply operation appears 
  * elsewhere.
  *
- * \see halEnablePMT_HV
- * \see halSetPMT_HV
- * \see halReadPMT_HV
+ * \see halPowerUpBase
+ * \see halWriteBaseDAC
+ * \see halReadBaseADC
+ * \see halDisableBaseHV
+ * \see halEnableBaseHV
  */
 void
-halDisablePMT_HV();
+halPowerDownBase(void);
 
 /**
  * power up flasher board
@@ -442,36 +469,6 @@ void
 halStepDownLED();
 
 /**
- * This routine sets the target output value of the PMT high voltage power 
- * supply.  Calibrated translation of digital values into power supply 
- * output voltages is not part of this interface and will be described 
- * elsewhere.  
- *
- * Errors: Attempts to set the target output value to a value in excess of the 
- * maximum set value will result in NO ACTION BEING TAKEN.  Unlike the 
- * behavior of the writeDAC() interface, errors of this sort are assumed 
- * to indicate incorrect program behavior and are considered invalid requests.
- *
- * \see halEnablePMT_HV
- * \see halDisablePMT_HV
- * \see halReadPMT_HV
- */
-void
-halSetPMT_HV(USHORT value);
-
-/** 
- * This routine reads the current output value of the PMT high voltage power 
- * supply.  Calibrated translation of this value into power supply output 
- * voltage is not part of this interface and will be described elsewhere.
- *
- * \see halEnablePMT_HV
- * \see halDisablePMT_HV
- * \see halSetPMT_HV
- */
-USHORT
-halReadPMT_HV();
-
-/**
  * This routine selects one (only) of eight possible analog input sources 
  * for the ATWD channel 0.  It also allows the disabling of all possible 
  * inputs.
@@ -519,6 +516,14 @@ const char *
 halGetBoardID();
 
 /**
+ * get the main board serial number (id) as a 48 bit number
+ *
+ * \return board id or 0 on error...
+ */
+unsigned long long
+halGetBoardIDRaw(void);
+
+/**
  * busy wait us microseconds.
  *
  * \param us microseconds to busy wait.
@@ -535,12 +540,28 @@ const char *
 halHVSerial(void);
 
 /**
+ * read high voltage base serial number
+ *
+ * \return serial number as a long long or 0 on error...
+ */
+unsigned long long
+halHVSerialRaw(void);
+
+/**
  * check to see if fpga is loaded
  *
  * \return non-zero if fpga is loaded
  */
-int 
+int
 halIsFPGALoaded(void);
+
+/**
+ * check to see if input data is there
+ *
+ * \return non-zero if there is data to read on stdin
+ */
+int 
+halIsInputData(void);
 
 /**
  * number of dom dac chip select lines...
@@ -636,9 +657,9 @@ typedef enum {
    /* CS3 */
    /** on-board LED brightness control */
    DOM_HAL_DAC_LED_BRIGHTNESS,
-   /** front end amp lower clamp voltage */
+   /** front end amp lower clamp voltage -- CURRENTLY UNUSED */
    DOM_HAL_DAC_FE_AMP_LOWER_CLAMP,
-   /** ??? */
+   /** flasher board timing pulse offset voltage */
    DOM_HAL_DAC_FL_REF,
    /** Set the DC offset of the ATWD mux input */
    DOM_HAL_DAC_MUX_BIAS

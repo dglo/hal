@@ -515,12 +515,20 @@ enum DOMPulserRates {
  * \defgroup fpga_test_led_atwd_delay Launch delay from on board led to ATWD
  * \ingroup fpga_test_regs
  *
- * \brief Low 4 bits are launch delay from on board led to ATWD.
+ * \brief Low 4 bits are launch delay from on board led to ATWD.  bits
+ * 12..15 are used for ATWD deadtime.  bit 8 is used to determine whether
+ * the scalars are in fast mode or not...
+ *
  * Delay is (2+LED_ATWD_DELAY)*25ns
+ *
+ * \see DOM_FPGA_TEST_Deadtimes
  */
 /*@{*/
 /** register addresss */
 #define DOM_FPGA_TEST_LED_ATWD_DELAY (DOM_FPGA_TEST_BASE + 0x1060)
+
+/** set scalars to 10ms sample period (100ms is the default) */
+#define DOM_FPGA_TEST_LED_ATWD_DELAY_FAST_SCALAR (0x00000100)
 /*@}*/
 
 /**

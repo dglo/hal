@@ -44,4 +44,10 @@ typedef unsigned char UBYTE;
 }
 #endif
 
+/**
+ * define TRUE and FALSE here and remove from domapp code
+ */
+#define TRUE 1
+#define FALSE 0
+
 #endif

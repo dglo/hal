@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_fpga.h
  *
- * $Revision: 1.28 $
- * $Author: arthur $
- * $Date: 2003-09-19 18:23:10 $
+ * $Revision: 1.34 $
+ * $Author: jkelley $
+ * $Date: 2004-03-10 23:40:08 $
  *
  * \b Usage:
  * \code
@@ -129,6 +129,19 @@ hal_FPGA_TEST_trigger_forced(int trigger_mask);
 void
 hal_FPGA_TEST_trigger_disc(int trigger_mask);
 
+/** 
+ * LED launch of the atwd/fadc...
+ *
+ * \param trigger_mask bitmask of devices to trigger
+ *
+ * \see HAL_FPGA_TEST_TRIGGER_ATWD0
+ * \see HAL_FPGA_TEST_TRIGGER_ATWD1
+ * \see HAL_FPGA_TEST_TRIGGER_LED_PULSER
+ * \see HAL_FPGA_TEST_TRIGGER_FADC
+ */
+void
+hal_FPGA_TEST_trigger_LED(int trigger_mask);
+
 /**
  * send a message over twisted pair communications channel
  *
@@ -170,6 +183,9 @@ long long hal_FPGA_getClock();
  * \see hal_FPGA_query_versions
  */
 typedef enum {
+   /** Invalid fpga type */
+   DOM_HAL_FPGA_TYPE_INVALID,
+
    /** Config boot fpga */
    DOM_HAL_FPGA_TYPE_CONFIG,
 
@@ -183,7 +199,7 @@ typedef enum {
    DOM_HAL_FPGA_TYPE_STF_COM,
 
    /** Application fpga */
-   DOM_HAL_FPGA_DOMAPP
+   DOM_HAL_FPGA_TYPE_DOMAPP
 } DOM_HAL_FPGA_TYPES;
 
 /** 
@@ -244,6 +260,14 @@ hal_FPGA_query_versions(DOM_HAL_FPGA_TYPES type, unsigned comps_mask);
  */
 int
 hal_FPGA_query_build(void);
+
+/**
+ * get fpga type.
+ *
+ * \return fpga type
+ */
+DOM_HAL_FPGA_TYPES 
+hal_FPGA_query_type(void);
 
 /** 
  * fpga valid pulser rates...
@@ -404,6 +428,60 @@ hal_FPGA_TEST_enable_pulser(void);
 void 
 hal_FPGA_TEST_disable_pulser(void);
 
+/** 
+ * Enable on-board LED pulser
+ *
+ * \see hal_FPGA_TEST_disable_LED
+ * \see hal_FPGA_TEST_trigger_LED
+ * \see hal_FPGA_TEST_set_atwd_LED_delay
+ */
+void 
+hal_FPGA_TEST_enable_LED(void);
+
+/** 
+ * Disable on-board LED pulser
+ *
+ * \see hal_FPGA_TEST_enable_LED
+ * \see hal_FPGA_TEST_trigger_LED
+ * \see hal_FPGA_TEST_set_atwd_LED_delay
+ */
+void 
+hal_FPGA_TEST_disable_LED(void);
+
+/**
+ * Set the ATWD launch delay from the LED pulse
+ *
+ * \param delay ATWD launch from LED pulse = (2+delay)*25ns
+ *
+ * \see hal_FPGA_TEST_enable_LED
+ * \see hal_FPGA_TEST_disable_LED
+ * \see hal_FPGA_TEST_start_FB_flashing
+ * \see hal_FPGA_TEST_stop_FB_flashing
+ * \see hal_FPGA_TEST_trigger_LED
+ */
+void 
+hal_FPGA_TEST_set_atwd_LED_delay(int delay);
+
+/**
+ * Routine that starts the flasher board flashing.
+ * 
+ * \see hal_FPGA_TEST_stop_FB_flashing
+ * \see hal_FPGA_TEST_trigger_LED
+ * \see hal_FPGA_TEST_set_atwd_LED_delay
+ *
+ */
+void
+hal_FPGA_TEST_start_FB_flashing(void);
+
+/**
+ * Routine that stops the flasher board flashing.
+ * 
+ * \see hal_FPGA_TEST_start_FB_flashing
+ *
+ */
+void
+hal_FPGA_TEST_stop_FB_flashing(void);
+
 /**
  * request reboot
  *
@@ -434,6 +512,45 @@ hal_FPGA_TEST_is_comm_avail(void);
  */
 void 
 hal_FPGA_TEST_clear_trigger(void);
+
+/**
+ * initialize the fpga, can be used to put the fpga in a known state.
+ * yes, i understand there are known knowns, known unknowns and 
+ * unknown unknowns.  this is probably a known unknown (if i had
+ * to commit).  This is not required to get the fpga to work, it is
+ * just a convenience function to try to get it in a known state.
+ */
+void
+hal_FPGA_TEST_init_state(void);
+
+/** 
+ * fpga scalar period types.
+ *
+ * \see hal_FPGA_TEST_set_scalar_period
+ */
+typedef enum {
+   /** 10ms scalar sample period */
+   DOM_HAL_FPGA_SCALAR_10MS,
+
+   /** 100ms scalar sample period */
+   DOM_HAL_FPGA_SCALAR_100MS
+} DOM_HAL_FPGA_SCALAR_PERIODS;
+
+/**
+ * set the scalar period
+ *
+ * \see DOM_HAL_FPGA_SCALAR_PERIODS
+ */
+void hal_FPGA_TEST_set_scalar_period(DOM_HAL_FPGA_SCALAR_PERIODS );
+
+/**
+ * set the atwd deadtime launch delay
+ *
+ * \param ns nanoseconds of delay (50, 100, 200, 400, ...)
+ *
+ * \see DOM_HAL_FPGA_SCALAR_PERIODS
+ */
+void hal_FPGA_TEST_set_deadtime(int ns);
 
 #endif
 
