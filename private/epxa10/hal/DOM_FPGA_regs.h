@@ -51,11 +51,11 @@
 /** acquire a front end pulser */
 #define   DOM_FPGA_TEST_SIGNAL_FE_PULSER    (0x01000000)
 /** acquire a single LED pulser */
-#define   DOM_FPGA_TEST_SIGNAL_LED_PULSER   (0x10000000)
+#define   DOM_FPGA_TEST_SIGNAL_LED_PULSER   (0x04000000)
 /** create a test waveform for debugging -- into channel 3 of ATWD */
-#define   DOM_FPGA_TEST_SIGNAL_R2R_TRIANGLE      (0x00010000)
+#define   DOM_FPGA_TEST_SIGNAL_R2R_TRIANGLE      (0x10000000)
 /** create a test waveform for debugging -- into front end, after delay line */
-#define   DOM_FPGA_TEST_SIGNAL_R2R_TRIANGLE_FE   (0x00100000)
+#define   DOM_FPGA_TEST_SIGNAL_R2R_TRIANGLE_FE   (0x40000000)
 /*@}*/
 
 /**

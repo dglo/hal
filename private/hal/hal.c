@@ -408,38 +408,15 @@ BOOLEAN ATWD0_done = FALSE;
 BOOLEAN ATWD1_done = FALSE;
 
 BOOLEAN
-hal_FPGA_TEST_atwd_readout_done(int chip) {
-    if(chip == 0) return ATWD0_done;
-    else return ATWD1_done;
-
+hal_FPGA_TEST_readout_done(int mask) {
+    return TRUE;
 }
 
-int
-hal_FPGA_TEST_atwd_readout(short *ch0, short *ch1, short *ch2, short *ch3,
-	int max, int chip) {
-    int i;
-
-    if(max > 128) max = 128;
-    for(i = 0; i < max; i++) {
-	ch0[i]=i%4;
-	ch1[i]=i%8;
-	ch2[i]=i%12;
-	ch3[i]=i%16;
-    }
-    if(chip == 0) ATWD0_done = FALSE;
-    else ATWD1_done = FALSE;
-    return max;
-}
-
-int
-hal_FPGA_TEST_fadc_readout(short *fadc, int max) {
-    int i;
- 
-    if(max > 256) max = 256;
-    for(i = 0; i < max; i++) {
-        fadc[i]=i;
-    }
-    return max;
+void
+hal_FPGA_TEST_readout(short *ch0_0, short *ch1_0, short *ch2_0, short *ch3_0,
+	short *ch0_1, short *ch1_1, short *ch1_2, short *ch3_1, int atwd_max,
+	short *fadc, int fadc_max,
+	int mask) {
 }
 
 void 

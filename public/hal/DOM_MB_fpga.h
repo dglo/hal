@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_fpga.h
  *
- * $Revision: 1.21 $
+ * $Revision: 1.22 $
  * $Author: arthur $
- * $Date: 2003-07-11 15:02:41 $
+ * $Date: 2003-07-14 18:14:45 $
  *
  * \b Usage:
  * \code
@@ -19,50 +19,45 @@
 #include "hal/DOM_MB_types.h"
 
 /**
- * check to see if atwd readout is done.
+ * check to see if triggered readout is done.
  *
- * \param chip chip 0 or 1
- *
- * \return non-zero if chip is done with readout
- * \see hal_FPGA_TEST_atwd_readout
- */
-BOOLEAN
-hal_FPGA_TEST_atwd_readout_done(int chip);
-
-/**
- * check to see if fast adc readout is done.
+ * \param trigger_mask the triggered channels to readout...
  *
  * \return non-zero if chip is done with readout
- * \see hal_FPGA_TEST_fadc_readout
+ * \see hal_FPGA_TEST_readout
+ * \see HAL_FPGA_TEST_TRIGGER_ATWD0
+ * \see HAL_FPGA_TEST_TRIGGER_ATWD1
+ * \see HAL_FPGA_TEST_TRIGGER_FADC
  */
 BOOLEAN
-hal_FPGA_TEST_fadc_readout_done(void);
+hal_FPGA_TEST_readout_done(int trigger_mask);
 
 /**
- * readout the atwd, wait for a readout to be done.
+ * readout the triggered channels, wait for a readout to be done first.
  *
- * \param ch0 channel 0 buffer to be filled, may be NULL (not filled)
- * \param ch1 channel 1 buffer to be filled, may be NULL (not filled)
- * \param ch2 channel 2 buffer to be filled, may be NULL (not filled)
- * \param ch3 channel 3 buffer to be filled, may be NULL (not filled)
- * \param max max number of words to write
- * \param chip chip 0 or 1
+ * \param ch0 chip 0 channel 0 buffer to be filled, may be NULL (not filled)
+ * \param ch1 chip 0 channel 1 buffer to be filled, may be NULL (not filled)
+ * \param ch2 chip 0 channel 2 buffer to be filled, may be NULL (not filled)
+ * \param ch3 chip 0 channel 3 buffer to be filled, may be NULL (not filled)
+ * \param ch4 chip 1 channel 0 buffer to be filled, may be NULL (not filled)
+ * \param ch5 chip 1 channel 1 buffer to be filled, may be NULL (not filled)
+ * \param ch6 chip 1 channel 2 buffer to be filled, may be NULL (not filled)
+ * \param ch7 chip 1 channel 3 buffer to be filled, may be NULL (not filled)
+ * \param max max number of atwd words to write (per channel)
+ * \param fadc fadc buffer
+ * \param nfadc number of fadc words to write
+ * \param trigger_mask triggered channels to readout...
  *
- * \return number of shorts read
- * \see hal_FPGA_TEST_atwd_readout_done
+ * \see hal_FPGA_TEST_readout
+ * \see HAL_FPGA_TEST_TRIGGER_ATWD0
+ * \see HAL_FPGA_TEST_TRIGGER_ATWD1
+ * \see HAL_FPGA_TEST_TRIGGER_FADC
  */
-int
-hal_FPGA_TEST_atwd_readout(short *ch0, short *ch1, short *ch2, short *ch3,
-			   int max, int chip);
-
-/**
- * readout the flash adc
- *
- * \return number of shorts read
- *
- */
-int
-hal_FPGA_TEST_fadc_readout(short *buffer, int max);
+void
+hal_FPGA_TEST_readout(short *ch0, short *ch1, short *ch2, short *ch3,
+		      short *ch4, short *ch5, short *ch6, short *ch7,
+		      int max, 
+		      short *fadc, int nfadc, int trigger_mask);
 
 /**
  * write triangle wave to communications DAC

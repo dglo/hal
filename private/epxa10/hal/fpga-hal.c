@@ -10,65 +10,82 @@
 #include "dom-fpga/fpga-versions.h"
 
 BOOLEAN
-hal_FPGA_TEST_atwd_readout_done(int chip) {
-   return ((chip==0) ?
-      RFPGABIT(TEST_SIGNAL_RESPONSE, ATWD0): 
-      RFPGABIT(TEST_SIGNAL_RESPONSE, ATWD1)) != 0;
-}
-
-BOOLEAN
-hal_FPGA_TEST_fadc_readout_done(void) {
-   return RFPGABIT(TEST_SIGNAL_RESPONSE, FADC_DONE)!=0;
-}
-
-int
-hal_FPGA_TEST_atwd_readout(short *ch0, short *ch1, short *ch2, short *ch3,
-			   int max, int chip) {
-   short *chs[] = { ch0, ch1, ch2, ch3 };
+hal_FPGA_TEST_readout_done(int trigger_mask) {
+   int ret = trigger_mask;
    
-   unsigned volatile *data = (unsigned volatile *)
-      ((chip==0) ? DOM_FPGA_TEST_ATWD0_DATA : DOM_FPGA_TEST_ATWD1_DATA);
+   if (trigger_mask & HAL_FPGA_TEST_TRIGGER_ATWD0) {
+      if (RFPGABIT(TEST_SIGNAL_RESPONSE, ATWD0)) {
+	 ret &= (~HAL_FPGA_TEST_TRIGGER_ATWD0);
+      }
+   }
+   
+   if (trigger_mask & HAL_FPGA_TEST_TRIGGER_ATWD1) {
+      if (RFPGABIT(TEST_SIGNAL_RESPONSE, ATWD1)) {
+	 ret &= (~HAL_FPGA_TEST_TRIGGER_ATWD1);
+      }
+   }
+
+   if (trigger_mask & HAL_FPGA_TEST_TRIGGER_FADC) {
+      if (RFPGABIT(TEST_SIGNAL_RESPONSE, FADC_DONE)) {
+	 ret &= (~HAL_FPGA_TEST_TRIGGER_FADC);
+      }
+   }
+
+   return ret==0;
+}
+
+void
+hal_FPGA_TEST_readout(short *ch0, short *ch1, short *ch2, short *ch3,
+		      short *ch4, short *ch5, short *ch6, short *ch7,
+		      int max, 
+		      short *fadc, int fadclen, 
+		      int trigger_mask) {
+   short *chs[] = { ch0, ch1, ch2, ch3, ch4, ch5, ch6, ch7 };
    int i, j;
 
-   /* wait for done bit...
+   /* wait for done...
     */
-   while (!hal_FPGA_TEST_atwd_readout_done(chip)) ;
+   while (!hal_FPGA_TEST_readout_done(trigger_mask)) ;
    
-   /* readout data...
+   /* don't readout buffers with no trigger...
     */
-   for (j=0; j<4; j++) {
+   if ((trigger_mask & HAL_FPGA_TEST_TRIGGER_ATWD0) == 0) {
+      for (i=0; i<4; i++) chs[i] = NULL;
+   }
+
+   if ((trigger_mask & HAL_FPGA_TEST_TRIGGER_ATWD1) == 0) {
+      for (i=4; i<8; i++) chs[i] = NULL;
+   }
+
+   if ((trigger_mask & HAL_FPGA_TEST_TRIGGER_FADC) == 0) {
+      fadc = NULL;
+   }
+
+   /* readout atwd data...
+    */
+   for (j=0; j<8; j++) {
       short *ch = chs[j];
+      unsigned volatile *data = (unsigned volatile *)
+	 ((j<4) ? DOM_FPGA_TEST_ATWD0_DATA : DOM_FPGA_TEST_ATWD1_DATA);
+
       if (ch!=NULL) {
 	 for (i=0; i<128 && i<max; i++) 
 	    ch[i] = data[j*128 + i];
       }
    }
    
-   /* clear launch bit...
-    */
-   FPGA(TEST_SIGNAL) = 0;
-
-   return i;
-}
-
-int
-hal_FPGA_TEST_fadc_readout(short *ch, int max) {
-   unsigned volatile *data = (unsigned volatile *)DOM_FPGA_TEST_FAST_ADC_DATA;
-   int i;
-
-   /* wait for done bit...
-    */
-   while (!hal_FPGA_TEST_fadc_readout_done()) ;
-   
    /* readout data...
     */
-   for (i=0; i<512 && i<max; i++) ch[i] = data[i];
+   if (fadc!=NULL) {
+      unsigned volatile *data = 
+	 (unsigned volatile *) DOM_FPGA_TEST_FAST_ADC_DATA;
+      for (i=0; i<512 && i<fadclen; i++) 
+	 fadc[i] = data[i];
+   }
    
    /* clear launch bit...
     */
    FPGA(TEST_SIGNAL) = 0;
-
-   return i;
 }
 
 void hal_FPGA_TEST_trigger_forced(int trigger_mask) {
@@ -77,7 +94,7 @@ void hal_FPGA_TEST_trigger_forced(int trigger_mask) {
       reg |= FPGABIT(TEST_SIGNAL, ATWD0);
    if (trigger_mask & HAL_FPGA_TEST_TRIGGER_ATWD1) 
       reg |= FPGABIT(TEST_SIGNAL, ATWD1);
-   if (trigger_mask & HAL_FPGA_TEST_TRIGGER_ATWD0) 
+   if (trigger_mask & HAL_FPGA_TEST_TRIGGER_FADC) 
       reg |= FPGABIT(TEST_SIGNAL, FADC);
 
    FPGA(TEST_SIGNAL) = reg;
@@ -89,7 +106,7 @@ void hal_FPGA_TEST_trigger_disc(int trigger_mask) {
       reg |= FPGABIT(TEST_SIGNAL, ATWD0_DISC);
    if (trigger_mask & HAL_FPGA_TEST_TRIGGER_ATWD1) 
       reg |= FPGABIT(TEST_SIGNAL, ATWD1_DISC);
-   if (trigger_mask & HAL_FPGA_TEST_TRIGGER_ATWD0) 
+   if (trigger_mask & HAL_FPGA_TEST_TRIGGER_FADC) 
       reg |= FPGABIT(TEST_SIGNAL, FADC_DISC);
 
    FPGA(TEST_SIGNAL) = reg;
