@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_fpga.h
  *
- * $Revision: 1.40.2.3 $
+ * $Revision: 1.40.2.4 $
  * $Author: arthur $
- * $Date: 2005-01-17 00:02:19 $
+ * $Date: 2005-05-16 21:41:59 $
  *
  * \b Usage:
  * \code
@@ -512,6 +512,14 @@ hal_FPGA_TEST_start_FB_flashing(void);
  */
 void
 hal_FPGA_TEST_stop_FB_flashing(void);
+
+/**
+ * Routine that sets the flasher board rate.
+ * 
+ * \param Rate in Hz
+ */
+void
+hal_FPGA_TEST_FB_set_rate(USHORT rate);
 
 /**
  * Auxiliary reset control for the flasher board.

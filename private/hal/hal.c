@@ -533,6 +533,7 @@ void hal_FPGA_TEST_stop_FB_flashing(void) {}
 void hal_FPGA_TEST_FB_set_aux_reset(void) {}
 void hal_FPGA_TEST_FB_clear_aux_reset(void) {}
 int hal_FPGA_TEST_FB_get_attn(void) {return 0;}
+void hal_FPGA_TEST_FB_set_rate(USHORT rate) { }
 
 int hal_FB_enable(int *config_time, int *valid_time) {return 0;}
 void hal_FB_enable_min(void) {}

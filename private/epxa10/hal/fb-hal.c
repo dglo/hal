@@ -1,9 +1,9 @@
 /**
  * \file fb-hal.c
  *
- * $Revision: 1.8.2.4 $
+ * $Revision: 1.8.2.5 $
  * $Author: arthur $
- * $Date: 2005-03-15 22:55:18 $
+ * $Date: 2005-05-16 21:41:59 $
  *
  * The DOM flasher board HAL.
  *
@@ -393,21 +393,6 @@ void hal_FB_select_mux_input(UBYTE value) {
 
     FB(LED_MUX_EN) = enable;
     FB(LED_MUX)    = select;
-}
-
-void hal_FB_set_rate(USHORT rate) {
-/* Sets flasher board rate -- minimum 1 Hz, max. 610 Hz */
-#define NRATES 10
-  USHORT table[NRATES] = { 610, 305, 153, 76, 38, 19, 10, 5, 2, 1 };
-  UBYTE ratebits = 0;
-  int it;
-  for(it=NRATES-1;it>0;it--) {
-    if(rate <= table[it]) {
-      ratebits = it; break;
-    }
-  }
-  FPGA(TEST_COMM) = FPGA(TEST_COMM) & ~(0xF<<16);
-  FPGA(TEST_COMM) = FPGA(TEST_COMM) | ((ratebits<<16)&0xF);
 }
 
 /*************************************************************************/
