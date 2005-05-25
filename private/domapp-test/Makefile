@@ -1,28 +1,8 @@
-.SUFFIXES: .c .o .S .elf .bin
+all: ../$(PLATFORM)/bin/real-app.bin.gz
 
-KOBJS = ../lib/crt0.o ../lib/libkernel.a
+../epxa10/bin/real-app.bin.gz: real-app.elf
 
-all: ../bin/real-app.bin.gz
-
-.c.o:
-	$(CC) -c $(CFLAGS) $<
-
-.S.o:
-	$(CPP) $(CPPFLAGS) -o $*.i $<
-	$(AS) $(AFLAGS) -o $*.o $*.i
-
-.elf.bin:
-	$(OBJCOPY) -O binary $*.elf $*.bin
-	$(CPP) $(CPPFLAGS) -DBINFILE=\"$*.bin\" -o $*-raw.i $(RAWS)
-	$(AS) $(AFLAGS) -o $*-raw.o $*-raw.i
-	$(LD) --script=$(RAWX) -o $*-raw.elf $*-raw.o
-	$(OBJCOPY) -O binary $*-raw.elf $*.bin
-
-../bin/%.bin.gz: %.bin; gzip -c $< > $@
-
-../bin/real-app.bin.gz: real-app.bin
-
-../bin/real-app: real-app.o
+../Linux-i386/bin/real-app: real-app.o
 	gcc -Wall -I../Linux-i386/public -L../Linux-i386/lib \
 		-DICESOFT_BUILD=\"$(ICESOFT_BUILD)\" \
 		-o real-app real-app.c -lhal
@@ -30,8 +10,8 @@ all: ../bin/real-app.bin.gz
 clean:
 	rm -f real-app *.o
 
-real-app.elf: real-app.o $(KERNELX) $(LIBHAL) $(SYSLIBS) $(KOBJS)
-	$(LD) --script=$(KERNELX) -o real-app.elf \
-		$(KOBJS) real-app.o \
-			$(LIBHAL) $(SYSLIBS)
+real-app.elf: real-app.o $(KERNELX) $(LIBHAL)
+	$(LD) --script=$(KERNELX) -o stfserv.elf \
+		$(KOBJS) stfserv.o $(STFOBJS) $(EXOBJS) \
+			$(LIBHAL) $(LIBEXPAT) $(SYSLIBS)
 

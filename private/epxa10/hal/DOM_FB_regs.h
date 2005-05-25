@@ -9,9 +9,22 @@
 #define DOM_FB_BASE (0x60000000)
 
 /* Flasher board layout version, RO */
-/* CPLD V11 and later: contains power-on reset bit, active low */
+/* mode == NORMAL MODE */
 #define DOM_FB_VERSION       (DOM_FB_BASE + 0x00000000)
-#define DOM_FB_VERSION_RESET_ACKN  0x80
+
+/* OVERLOADED for one-wire operation -- see MODE_SELECT */
+/* mode == ONE WIRE MODE */
+#define DOM_FB_ONE_WIRE      (DOM_FB_BASE + 0x00000000)
+#define DOM_FB_ONE_WIRE_BUSY 0x20
+#define DOM_FB_ONE_WIRE_DATA 0x40
+
+/* OVERLOADED for SPI control -- see MODE_SELECT */
+/* MODE == SPI MODE */
+#define DOM_FB_SPI_CTRL      (DOM_FB_BASE + 0x00000000)
+#define DOM_FB_SPI_CTRL_SCLK 0x01
+#define DOM_FB_SPI_CTRL_MOSI 0x02
+/* Active low! */
+#define DOM_FB_SPI_CTRL_CSN  0x04
 
 /* Addressing resets CPLD; data ignored */
 #define DOM_FB_RESET         (DOM_FB_BASE + 0x00000001)
@@ -19,33 +32,13 @@
 /* CPLD firmware version, 8b RO */
 #define DOM_FB_CPLD_VERSION  (DOM_FB_BASE + 0x00000002)
 
-/* 
- * OBSOLETE: only used for CPLD version <= 4
- * Set CPLD working mode (normal, spi, or one-wire). 
+/* Set CPLD working mode (normal, spi, or one-wire). 
  * 2b WO, see state machine in documentation for details.
  */
 #define DOM_FB_MODE_SELECT   (DOM_FB_BASE + 0x00000003)
 
-/* SPI control register -- used to set brightness */
-/* For versions >= 6, SPI control is internal to PLD */
-/* and can just write value to this register */
-#define DOM_FB_SPI_CTRL      (DOM_FB_BASE + 0x00000004)
-#define DOM_FB_SPI_CTRL_SCLK 0x01
-#define DOM_FB_SPI_CTRL_MOSI 0x02
-/* Active low! */
-#define DOM_FB_SPI_CTRL_CSN  0x04
-
 /* Power control, 1b WO */
 #define DOM_FB_DCDC_CTRL     (DOM_FB_BASE + 0x00000005)
-
-/* One-wire control -- used to read ID */
-#define DOM_FB_ONE_WIRE      (DOM_FB_BASE + 0x00000006)
-#define DOM_FB_ONE_WIRE_PRESENT 0x10
-#define DOM_FB_ONE_WIRE_BUSY    0x20
-#define DOM_FB_ONE_WIRE_DATA    0x40
-
-/* Local clock counter, low byte */
-#define DOM_FB_CLK_LO        (DOM_FB_BASE + 0x00000007)
 
 /* Pulse width adjustment, 8b */
 #define DOM_FB_DELAY_ADJUST  (DOM_FB_BASE + 0x00000008)
@@ -80,9 +73,6 @@
 
 /* Delay chip enable, 1b WO */
 #define DOM_FB_LE_DP         (DOM_FB_BASE + 0x0000000e)
-
-/* Local clock counter, high byte */
-#define DOM_FB_CLK_HI        (DOM_FB_BASE + 0x0000000f)
 
 /* usage: FB(DELAY_ADJUST) */
 #define FB(a) ( *(volatile UBYTE *) DOM_FB_##a )

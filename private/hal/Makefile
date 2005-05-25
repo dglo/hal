@@ -1,16 +1,14 @@
-#
-# libhal makefile, used in conjuction with the workspace
-# makefile
-#
-OBJS = hal.o
+OBJS = emu.o
+CC = gcc
+CFLAGS = -Wall -I../include
 
 .c.o:
 	$(CC) -c $(CFLAGS) $<
 
-all: $(LIBHAL)
+all: ../lib/libdomhal.a
 
 clean:
-	rm -f $(OBJS)
+	rm -f ../lib/libdomhal.a $(OBJS)
 
-$(LIBHAL): $(OBJS)
-	$(AR) r $(LIBHAL) $(OBJS)
+../lib/libdomhal.a: $(OBJS)
+	$(AR) r ../lib/libdomhal.a $(OBJS)

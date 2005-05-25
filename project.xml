@@ -1,16 +1,1 @@
-<project>
-	<name>hal</name>
-	<packages default="icecube.daq.hal">
-		icecube.daq.hal
-	</packages>
-	<uses>
-		<libs/>
-		<tools/>
-	</uses>
-	<test>
-		<uses>
-			<libs/>
-			<tools/>
-		</uses>
-	</test>
-</project>
+<project>	<name>hal</name>	<packages default="icecube.daq.hal">		icecube.dq.hal	</packages>	<uses>		<libs/>		<tools/>	</uses>	<test>		<uses>			<libs/>			<tools/>		</uses>	</test></project>

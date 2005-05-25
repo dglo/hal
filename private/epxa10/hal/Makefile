@@ -2,7 +2,7 @@
 # libhal makefile, used in conjuction with the workspace
 # makefile
 #
-OBJS = hal.o fpga-hal.o fb-hal.o comm-hal.o domapp-hal.o
+OBJS = hal.o fpga-hal.o
 
 .c.o:
 	$(CC) -c $(CFLAGS) $<

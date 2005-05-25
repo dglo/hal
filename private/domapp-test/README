@@ -25,7 +25,6 @@ CONF name=value ...\n : configuration message
 ECHO\n : go into echo mode (no return)
 VERS\n: request version information
 REBT\n: reboot dom
-PULS clock1 clock2 ...\n: schedule fe pulser
         
 from dom:
 

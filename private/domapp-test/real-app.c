@@ -59,7 +59,6 @@ static void moniMsg(void) {
                    " baseHV=%d", halReadBaseADC());
 
    /* FIXME: use last read temp to avoid delays? */
-   /* FIXME: format temperature? */
    len += snprintf(msg + len, sizeof(msg) - len,
                    " temperature=%d", halReadTemp());
    msg[len] = '\n';
@@ -116,7 +115,7 @@ static const char *fpgaType(DOM_HAL_FPGA_TYPES type) {
 static void versMsg(void) {
    char b[512];
    int len = snprintf(b, sizeof(b), "VERS");
-   len += snprintf(b + len, sizeof(b) - len, " sw-build=%d",
+   len += snprintf(b + len, sizeof(b) - len, " sw-build=%s",
                    ICESOFT_BUILD);
    len += snprintf(b + len, sizeof(b) - len, " fpga-type=%s",
                    fpgaType(hal_FPGA_query_type()));
@@ -155,52 +154,23 @@ static void confMsg(char *buf) {
    send(msg, len+1);
 }
 
-/* pulser message... */
-static void pulseMsg(char *buf) {
-}
-
 int main(void) {
-   enum { CONF, RUNNING } state;
-   
    while (1) {
       char buf[4096];
-      int nr;
+      int nr = receive(buf);
       
-      if (state==RUNNING) {
-         /* calibration source done? */
-         if (calPending && 
-             (hal_FPGA_DOMAPP_get_local_clock()&0xffffffff)>calClock ) {
-            /* dequeue, add the next one... */
-         }
-         
-         /* */
-         if (hal_FPGA_msg_ready() && !hal_FPGA_send_would_block()) {
-         }
-      }
-      else {
-      }
-
-      /* check for messages... */
-      nr = receive(buf);
-
       if (nr<=0) {
          char msg[] = "EXCP unable to receive message\n";
          send(msg, sizeof(msg));
       }
       else {
-         int i;
-         
          char *eol = strchr(buf, '\n'); /* get end of header marker */
-         if (eol==NULL) eol=strchr(buf, '\r');
          
          if (eol==NULL) {
             char msg[] = "EXCP invalid header -- no eol terminator\n";
             send(msg, sizeof(msg));
          }
          else {
-            char errmsg[128];
-            int ok = 1;
-            
             *eol = 0; /* terminate header string... */
             if (memcmp(buf, "MONI", 4)==0) {
                moniMsg();
@@ -226,15 +196,9 @@ int main(void) {
                   send(b, nr);
                }
             }
-            else if (memcmp(buf, "PULS", 4)==0) {
-               pulseMsg(buf+4);
-            }
             else {
-               char msg[256];
-               int n = snprintf(msg, sizeof(msg), 
-                                "EXCP invalid header -- "
-                                "unrecognized message\n");
-               send(msg, n);
+               char msg[] = "EXCP invalid header -- unrecognized message\n";
+               send(msg, sizeof(msg));
             }
          }
       }

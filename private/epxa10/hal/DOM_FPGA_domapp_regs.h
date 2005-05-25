@@ -20,13 +20,13 @@
 /**
  * Systime MSB
  */
-#define DOM_FPGA_DOMAPP_SYSTIME_MSB (DOM_FPGA_BASE + 0x444)
+#define DOM_FPGA_DOMAPP_SYSTIME_LSB (DOM_FPGA_BASE + 0x444)
 
 /**
  * convenience macros
  */
-#define FPGA(a) ( *(volatile unsigned *) DOM_FPGA_##a )
-#define FPGABIT(a, b) (DOM_FPGA_##a##_##b)
+#define FPGA(a) ( *(volatile unsigned *) DOM_FPGA_DOMAPP_##a )
+#define FPGABIT(a, b) (DOM_FPGA_DOMAPP_##a##_##b)
 
 /**
  * read fpga bits...
