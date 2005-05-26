@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_pld.h
  *
- * $Revision: 1.32.6.1 $
+ * $Revision: 1.34 $
  * $Author: arthur $
- * $Date: 2004-11-24 19:47:10 $
+ * $Date: 2005-03-29 16:54:50 $
  *
  * \b Usage:
  * \code
@@ -540,6 +540,13 @@ halStepDownLED();
  */
 void
 halSelectAnalogMuxInput(UBYTE channel);
+
+/**
+ * disables analog mux
+ */
+void
+halDisableAnalogMux(void);
+
 
 /**
  * set swap flash memory chips...
