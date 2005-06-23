@@ -51,48 +51,53 @@ static unsigned cmQueue[4096];
 static int cmPending; /* is there an interrupt pending? */
 
 static void irqHandler(void) {
-   if (intRequestStatus()==IRQ_CAL_FLASH) {
-      if (cmHead!=cmTail) {
-         const unsigned idx = cmTail % lengthof(cmQueue);
-         FPGA(CAL_TIME) = cmQueue[idx];
-         cmTail++;
+   FPGA(PONG) = intRequestStatus()&0x7;
+   
+   while (intRequestStatus() & (IRQ_CAL_FLASH|IRQ_RATE_METER|IRQ_SN_UPDATE)) {
+      if (intRequestStatus() & IRQ_CAL_FLASH) {
+         if (cmHead!=cmTail) {
+            const unsigned idx = cmTail % lengthof(cmQueue);
+            FPGA(CAL_TIME) = cmQueue[idx];
+            cmTail++;
+         }
+         else {
+            /* interrupt when empty means that we won't be able
+             * to help in the future...
+             */
+            cmPending = 0;
+         }
+         
+         FPGA(INT_ACK) = FPGABIT(INT_ACK, CAL);
+      }
+      else if (intRequestStatus() & IRQ_RATE_METER) {
+         /* read rate meter... */
+         speQueue[speHead % lengthof(speQueue)] = FPGA(RATE_SPE);
+         mpeQueue[mpeHead % lengthof(mpeQueue)] = FPGA(RATE_MPE);
+         speHead++; mpeHead++;
+         FPGA(INT_ACK) = FPGABIT(INT_ACK, RATE);
+      }
+      else if (intRequestStatus() & IRQ_SN_UPDATE) {
+         /* FIXME: deal with 32 bit rollover... */
+         int i;
+         unsigned sn = FPGA(SN_DATA);
+         unsigned long long ticks = 
+            ((unsigned long long) FPGA(SYSTIME_MSB) << 32) | 
+            (sn&0xffff0000) | 1;
+         
+         /* get sn data */
+         for (i=0; i<4; i++) {
+            const int idx = snHead % lengthof(snEvents);
+            snEvents[idx].counts = (sn>>(4*i))&0xf;
+            snEvents[idx].ticks = ticks + 65536 * i;
+            snHead++;
+         }
+         
+         /* ack the interrupt... */
+         FPGA(INT_ACK) = FPGABIT(INT_ACK, SN);
       }
       else {
-         /* interrupt when empty means that we won't be able
-          * to help in the future...
-          */
-         cmPending = 0;
+         /* yikes!!! */
       }
-      
-      FPGA(INT_ACK) = FPGABIT(INT_ACK, CAL);
-   }
-   else if (intRequestStatus()==IRQ_RATE_METER) {
-      /* read rate meter... */
-      speQueue[speHead % lengthof(speQueue)] = FPGA(RATE_SPE);
-      mpeQueue[mpeHead % lengthof(mpeQueue)] = FPGA(RATE_MPE);
-      speHead++; mpeHead++;
-      FPGA(INT_ACK) = FPGABIT(INT_ACK, RATE);
-   }
-   else if (intRequestStatus()==IRQ_SN_UPDATE) {
-      /* FIXME: deal with 32 bit rollover... */
-      int i;
-      unsigned sn = FPGA(SN_DATA);
-      unsigned long long ticks = 
-         ((unsigned long long) FPGA(SYSTIME_MSB) << 32) | (sn&0xffff0000) | 1;
-      
-      /* get sn data */
-      for (i=0; i<4; i++) {
-         const int idx = snHead % lengthof(snEvents);
-         snEvents[idx].counts = (sn>>(4*i))&0xf;
-         snEvents[idx].ticks = ticks + 65536 * i;
-         snHead++;
-      }
-
-      /* ack the interrupt... */
-      FPGA(INT_ACK) = FPGABIT(INT_ACK, SN);
-   }
-   else {
-      /* yikes!!! */
    }
 }
 
