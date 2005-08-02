@@ -1,9 +1,9 @@
 /**
  * \file fb-hal.c
  *
- * $Revision: 1.16 $
- * $Author: jkelley $
- * $Date: 2005-05-02 20:16:58 $
+ * $Revision: 1.8.2.5 $
+ * $Author: arthur $
+ * $Date: 2005-05-16 21:41:59 $
  *
  * The DOM flasher board HAL.
  *
@@ -15,11 +15,11 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "hal/DOM_MB_pld.h"
-#include "hal/DOM_MB_fb.h"
-#include "hal/DOM_MB_domapp.h"
-#include "hal/DOM_MB_fpga.h"
+#include "booter/epxa.h"
+
+#include "hal/DOM_MB_hal.h"
 #include "DOM_FB_regs.h"
+#include "DOM_FPGA_regs.h"
 #include "fb-hal.h"
 
 int getFBclock(void) {
@@ -28,7 +28,7 @@ int getFBclock(void) {
 
 static int fbIsPowered = 0;
 
-int hal_FB_enable(int *config_time, int *valid_time, int *reset_time, DOM_FPGA_TYPE fpga_type) {
+int hal_FB_enable(int *config_time, int *valid_time, int *reset_time) {
 
     /* Loop timeout limit for ATTN ack sequence, in us */
     int ack_timeout = 50000;
@@ -47,12 +47,7 @@ int hal_FB_enable(int *config_time, int *valid_time, int *reset_time, DOM_FPGA_T
 
     /* Enable the flasherboard interface in the mainboard CPLD */
     halEnableFlasher();
-
-    unsigned long long reset_start_time;
-    if (fpga_type == DOM_FPGA_DOMAPP)
-        reset_start_time = hal_FPGA_DOMAPP_get_local_clock();
-    else
-        reset_start_time = hal_FPGA_TEST_get_local_clock();
+    unsigned long long reset_start_time = hal_FPGA_TEST_get_local_clock();
 
     /* Start FPGA ack reset sequence -- aux reset functions independently */
     /* of 20MHz clock to test for CPLD configuration */
@@ -60,37 +55,20 @@ int hal_FB_enable(int *config_time, int *valid_time, int *reset_time, DOM_FPGA_T
     int state_cnt = 0;
     int done = 0;
 
-    unsigned long long start_time;
-    if (fpga_type == DOM_FPGA_DOMAPP) {
-        start_time = hal_FPGA_DOMAPP_get_local_clock();    
-        last_attn = hal_FPGA_DOMAPP_FB_get_attn();
-    }
-    else {
-        start_time = hal_FPGA_TEST_get_local_clock();
-        last_attn = hal_FPGA_TEST_FB_get_attn();
-    }
+    unsigned long long start_time = hal_FPGA_TEST_get_local_clock();
 
+    last_attn = hal_FPGA_TEST_FB_get_attn();
     while (!done) {
         /* Aux_reset "clock" cycle */
-        if (fpga_type == DOM_FPGA_DOMAPP) {
-            hal_FPGA_DOMAPP_FB_set_aux_reset();
-            hal_FPGA_DOMAPP_FB_clear_aux_reset();
-            /* Monitor how long this is taking */
-            *config_time = (int)(hal_FPGA_DOMAPP_get_local_clock() - start_time) / 
-                (FPGA_HAL_TICKS_PER_SEC / 1000000);
-            /* Check for state change on ATTN */
-            attn = hal_FPGA_DOMAPP_FB_get_attn();
-        }
-        else {
-            hal_FPGA_TEST_FB_set_aux_reset();
-            hal_FPGA_TEST_FB_clear_aux_reset();
-            /* Monitor how long this is taking */
-            *config_time = (int)(hal_FPGA_TEST_get_local_clock() - start_time) / 
-                (FPGA_HAL_TICKS_PER_SEC / 1000000);
-            /* Check for state change on ATTN */
-            attn = hal_FPGA_TEST_FB_get_attn();
-        }
+        hal_FPGA_TEST_FB_set_aux_reset();
+        hal_FPGA_TEST_FB_clear_aux_reset();
 
+        /* Monitor how long this is taking */
+        *config_time = (int)(hal_FPGA_TEST_get_local_clock() - start_time) / 
+            (FPGA_HAL_TICKS_PER_SEC / 1000000);
+
+        /* Check for state change on ATTN */
+        attn = hal_FPGA_TEST_FB_get_attn();
         if (attn != last_attn) 
             state_cnt++;
 
@@ -99,10 +77,7 @@ int hal_FB_enable(int *config_time, int *valid_time, int *reset_time, DOM_FPGA_T
     }
 
     if (*config_time > ack_timeout) {
-        if (fpga_type == DOM_FPGA_DOMAPP)
-            hal_FPGA_DOMAPP_FB_clear_aux_reset();
-        else
-            hal_FPGA_TEST_FB_clear_aux_reset();
+        hal_FPGA_TEST_FB_clear_aux_reset();
         hal_FB_disable();
         return FB_HAL_ERR_CONFIG_TIME;
     }
@@ -111,11 +86,7 @@ int hal_FB_enable(int *config_time, int *valid_time, int *reset_time, DOM_FPGA_T
 
     /* Validate that clock is running correctly */
     done = 0;
-    if (fpga_type == DOM_FPGA_DOMAPP)
-        start_time = hal_FPGA_DOMAPP_get_local_clock();
-    else
-        start_time = hal_FPGA_TEST_get_local_clock();
-
+    start_time = hal_FPGA_TEST_get_local_clock();
     int fb_clk_us;
     int vld_cnt = 0;
     unsigned long long stable_start = 0;
@@ -123,11 +94,9 @@ int hal_FB_enable(int *config_time, int *valid_time, int *reset_time, DOM_FPGA_T
     int stable_time = 0;
 
     while (!done) {
-        if (fpga_type == DOM_FPGA_DOMAPP)
-            loop_start = hal_FPGA_DOMAPP_get_local_clock();
-        else
-            loop_start = hal_FPGA_TEST_get_local_clock();
 
+        loop_start = hal_FPGA_TEST_get_local_clock();
+        
         /* Reset the flasherboard CPLD, and wait 250us */
         FB(RESET) = 0x1;
         halUSleep(250);
@@ -144,24 +113,16 @@ int hal_FB_enable(int *config_time, int *valid_time, int *reset_time, DOM_FPGA_T
             vld_cnt = 0;
 
         /* Monitor how long this is taking */
-        if (fpga_type == DOM_FPGA_DOMAPP)
-            now = hal_FPGA_DOMAPP_get_local_clock();
-        else
-            now = hal_FPGA_TEST_get_local_clock();
-
+        now = hal_FPGA_TEST_get_local_clock();
         *valid_time = (int)(now - start_time) / (FPGA_HAL_TICKS_PER_SEC / 1000000);        
         stable_time = (int)(now - stable_start) / (FPGA_HAL_TICKS_PER_SEC / 1000000);        
-        
+
         /* Are we done? Check that clock is running and is stable */
         done = (*valid_time > vld_timeout) || (vld_cnt == 8);
     }
-    
+
     if (*valid_time > vld_timeout) {
-        if (fpga_type == DOM_FPGA_DOMAPP)
-            hal_FPGA_DOMAPP_FB_clear_aux_reset();
-        else
-            hal_FPGA_TEST_FB_clear_aux_reset();
-        
+        hal_FPGA_TEST_FB_clear_aux_reset();
         hal_FB_disable();
         return FB_HAL_ERR_VALID_TIME;
     }
@@ -178,23 +139,15 @@ int hal_FB_enable(int *config_time, int *valid_time, int *reset_time, DOM_FPGA_T
         reset_ack = ((FB(VERSION) &  DOM_FB_VERSION_RESET_ACKN) == 0);
 
         /* Monitor how long this is taking */
-        if (fpga_type == DOM_FPGA_DOMAPP) {
-            *reset_time = (int)(hal_FPGA_DOMAPP_get_local_clock() - reset_start_time) / 
-                (FPGA_HAL_TICKS_PER_SEC / 1000000);
-        }
-        else {
-            *reset_time = (int)(hal_FPGA_TEST_get_local_clock() - reset_start_time) / 
-                (FPGA_HAL_TICKS_PER_SEC / 1000000);
-        }
+        *reset_time = (int)(hal_FPGA_TEST_get_local_clock() - reset_start_time) / 
+            (FPGA_HAL_TICKS_PER_SEC / 1000000);
+
         /* Are we done? Check that clock is running and is stable */
         done = (*reset_time > rst_timeout) || (reset_ack);
     }
 
     if (*reset_time > rst_timeout) {
-        if (fpga_type == DOM_FPGA_DOMAPP)
-            hal_FPGA_DOMAPP_FB_clear_aux_reset();
-        else
-            hal_FPGA_TEST_FB_clear_aux_reset();
+        hal_FPGA_TEST_FB_clear_aux_reset();
         hal_FB_disable();
         return FB_HAL_ERR_RESET_TIME;
     }    
@@ -209,14 +162,8 @@ int hal_FB_enable(int *config_time, int *valid_time, int *reset_time, DOM_FPGA_T
     hal_FB_set_pulse_width(64);
 
     /* Toggle ATTN again to clear out LED pulse flip-flops */
-    if (fpga_type == DOM_FPGA_DOMAPP) {
-        hal_FPGA_DOMAPP_FB_set_aux_reset();
-        hal_FPGA_DOMAPP_FB_clear_aux_reset();
-    }
-    else {
-        hal_FPGA_TEST_FB_set_aux_reset();
-        hal_FPGA_TEST_FB_clear_aux_reset();
-    }
+    hal_FPGA_TEST_FB_set_aux_reset();
+    hal_FPGA_TEST_FB_clear_aux_reset();
 
     /* Power on the DC-DC converter */
     hal_FB_set_DCDCen(1);
@@ -1941,3 +1888,4 @@ int hal_FB_xsvfExecute(int *p, int nbytes)
 
     return( XSVF_ERRORCODE(xsvfInfo.iErrorCode) );
 }
+
