@@ -10,9 +10,9 @@
 #include "hal/DOM_MB_pld.h"
 #include "DOM_FPGA_regs.h"
 
-#include "dom-fpga/fpga-versions.h"
-
 #include "booter/epxa.h"
+
+#define lengthof(a) (sizeof(a)/sizeof(a[0]))
 
 /* prepended to all packets... */
 static inline int pktLen(unsigned h)     { return h&0xfff; }
@@ -196,7 +196,7 @@ static int hal_FPGA_hwreceive(unsigned *msg) {
    
    /* get header */
    msg[0] = rx_buf[raddr%(1024*32/4)]; raddr++;
-   
+
    /* get data */
    {  const int nw = pktWords(msg[0]);
       int i;
@@ -254,7 +254,10 @@ static inline int hwPktLen(int swlen) {
  *
  * the read queue has to be able to hold at least an
  * entire software packet.  we give it space for two
- * just in case (too much?)...
+ * just in case (too much?).  it also has to be bigger
+ * than the retransmit queue on the other side -- this
+ * ensures that we don't start retxing packets on
+ * "normal" throughput paths...
  */
 #define RDQUEUEDATASIZE (2*(MAXSWPKTSIZE + sizeof(unsigned)))
 #define RDQUEUEDATALEN  ((RDQUEUEDATASIZE+3)/sizeof(unsigned))
@@ -263,6 +266,8 @@ static inline int hwPktLen(int swlen) {
  *
  * the tx data buffer must have enough room to hold data until
  * we expect an acq back...
+ *
+ * these are misnamed, they should be retx datalen and retx datasize...
  */
 #define TXPKTDATALEN  (1024*2)
 #define TXPKTDATASIZE (TXPKTDATALEN*sizeof(unsigned))
@@ -304,116 +309,78 @@ static struct DomStatsPkt {
    int nInvalidPostIC; /* number of invalid packets past ic... */
 } domStatsPkt;
 
-/* the retx list is a linked list, with a pointer
- * to the head and tail so that we can take stuff
- * out and put stuff in quickly...
- */
-typedef struct RetxEltStruct {
-   struct RetxEltStruct *next;
-   unsigned *pkt;  /* the packet to retx, set to NULL when done */
-   unsigned ticks; /* the getTicks() at the time of last transmit */
-} RetxElt;
-
-static RetxElt retxQ[WRPKTQUEUELEN];
-static RetxElt *retxHead, *retxTail, *retxFree;
-
-static void retxInit(int force) {
-   /* we need to initialize the free list -- first time only... */
-   if (force || (retxHead==NULL && retxTail==NULL && retxFree==NULL)) {
-      int i;
-      const int n = sizeof(retxQ)/sizeof(retxQ[0]);
-      /* clear it, this may not be the first time... */
-      memset(retxQ, 0, sizeof(retxQ));
-      retxHead = retxTail = NULL;
-      retxFree = retxQ;
-      for (i=0; i<n-1; i++) retxQ[i].next = retxQ + (i+1);
-      retxQ[n-1].next = NULL;
-   }
-}
-
-/* allocate from the free list... */
-static RetxElt *retxAlloc(void) {
-   retxInit(0);
-
-   /* collect stats... */
-   {  RetxElt *elt;
-      int ne = 0;
-      for (elt=retxTail; elt!=NULL; elt=elt->next) ne++;
-      if (ne>domStatsPkt.maxRetxEntries) domStatsPkt.maxRetxEntries = ne;
-   }
+struct {
+   struct {
+      unsigned *pkt;
+      unsigned ticks;
+   } q[128];
    
-   if (retxFree==NULL) return NULL;
+   unsigned short h, t;
+   unsigned short tt;
+   unsigned short i;
+} retx;
 
-   /* unlink from the free list... */
-   {  RetxElt *ret = retxFree;
-      retxFree = retxFree->next;
-      memset(ret, 0, sizeof(RetxElt));
-      return ret;
-   }
+static inline int retxIndex(unsigned short i) {
+   return i % lengthof(retx.q);
 }
 
-/* move allocated pointer back to free list... */
-static void retxDispose(RetxElt *elt) {
-   elt->next = retxFree;
-   retxFree = elt;
-   elt->pkt = NULL;
-   elt->ticks = 0;
-}
-
-/* inserts are ordered by seqn, make sure to keep the order...
- * head points to the place to put it...
- */
-static void retxInsert(RetxElt *elt) {
-   if (retxHead!=NULL) retxHead->next = elt;
-   else {
-      /* retxHead==NULL -> retxTail==NULL */
-      retxTail = elt;
-   }
-
-   retxHead = elt;
-   elt->next = NULL;
-}
-
-/* search from tail for seqn...
- *
- * most likely the delete will come off the tail,
- * but it may not, so we have to relink it if it
- * came from the middle...
- *
- * return: 1 deleted, 0 not found
- */
 static int retxDelete(unsigned short seqn) {
-   /* delete is trickier... */
-   RetxElt *prev = NULL, *t;
-   for (t=retxTail; t!=NULL; prev=t, t=t->next) {
-      unsigned hdr = t->pkt[0];
-      if (pktSeqn(hdr)==seqn) {
-         /* found it! */
-         if (t==retxTail) {
-            /* normal case... */
-            if (retxTail==retxHead) retxTail = retxHead = NULL;
-            else retxTail = retxTail->next;
-         }
-         else {
-            /* must be more than one elt -- prev is set correctly... */
-            prev->next = t->next;
-            if (t==retxHead) retxHead = prev;
-         }
+   unsigned short i;
+   int found = 0;
 
+   /* search (from the back) for the seqn...
+    */
+   for (i=retx.t; i!=retx.tt; i++) {
+      const int idx = retxIndex(i);
+      unsigned *pkt = retx.q[idx].pkt;
+      
+      if (pkt!=NULL && pktSeqn(*pkt)==seqn) {
+         /* found it!! */
+         found = 1;
+         retx.q[idx].pkt = NULL;
+      }
+   }
+
+   /* clear out the retx tail of old packets... 
+    */
+   while (retx.t!=retx.tt) {
+      const int idx = retxIndex(retx.t);
+      if (retx.q[idx].pkt!=NULL) break;
+      retx.t++;
+   }
+
+   return found;
+}
+
+static void retxClear(void) {
+   retx.h = retx.t = retx.i = retx.tt = 0;
+}
+
+/* take the contents of the retx buffer and put
+ * them on the hw...
+ */
+static void txFlush(void) {
+   while (retx.i!=retx.h) {
+      const int idx = retxIndex(retx.i);
+      unsigned *pkt = retx.q[idx].pkt;
+      if (pkt!=NULL) {
 #if defined(DEBUGSERIAL) && 0
          {
             char msg[80];
-            snprintf(msg, sizeof(msg), "del seq: %hu", pktSeqn(hdr));
+            snprintf(msg, sizeof(msg),
+                     "tx data: %hu [%u]", pktSeqn(pkt[0]), getTicks());
             writeDebug(msg);
          }
 #endif
-
-         /* free the packet... */
-         retxDispose(t);
-         return 1;
+         hal_FPGA_hwsend(pkt);
+         retx.q[idx].ticks = getTicks();
+         domStatsPkt.nTxDataPkts++;
+         domStatsPkt.nTxPkts++;
       }
+      
+      if (retx.i==retx.tt) retx.tt++;
+      retx.i++;
    }
-   return 0;
 }
 
 /* the read queue, all read packets pass through here...
@@ -480,21 +447,22 @@ static unsigned *txAlloc(int payloadlen) {
    static unsigned txPktData[2][TXPKTDATALEN];
    static int from, idx;
    const int hwlen = pktWords(payloadlen);
-
+   
    if (idx+hwlen>TXPKTDATALEN) {
       int tidx = 0;
       int to = (from + 1)&1;
-      RetxElt *elt = retxTail;
+      unsigned short i;
       
       /* try a gc cycle... */
-      for (elt=retxTail; elt!=NULL; elt=elt->next) {
-         if (elt->pkt!=NULL) {
+      for (i=retx.t; i!=retx.h; i++) {
+         const int idx = retxIndex(i);
+         unsigned *pkt = retx.q[idx].pkt;
+         if (pkt!=NULL) {
             /* copy the packet... */
-            unsigned *pkt = (unsigned *) elt->pkt;
             unsigned hdr = *(unsigned *) pkt;
             const int nw = pktWords(hdr);
             memcpy(txPktData[to] + tidx, pkt, nw*sizeof(unsigned));
-            elt->pkt = txPktData[to] + tidx;
+            retx.q[idx].pkt = txPktData[to] + tidx;
             tidx += nw;
          }
       }
@@ -526,7 +494,6 @@ static unsigned *rcvHWPkt(void) {
    domStatsPkt.nRxPkts++;
    return pkt;
 }
-
 #define NACKQBITS    8
 #define NACKQENTRIES (1<<NACKQBITS)
 #define ACKQMASK    (NACKQENTRIES-1)
@@ -593,7 +560,7 @@ static void connectInit(void) {
    rdQHead = rdQTail = 0;
 
    /* reset retx buffer */
-   retxInit(1);
+   retxClear();
 
    /* signal that we're connected... */
    state=STATE_CONNECTED;
@@ -705,8 +672,7 @@ static int scanPkts(int aggressive) {
          domStatsPkt.nRxAckPkts++;
          
          /* ack packet... */
-         const int idx = retxDelete(pktSeqn(hdr));
-         if (idx==0) {
+         if (retxDelete(pktSeqn(hdr))) {
             /* whoops -- already acked! */
             domStatsPkt.nRxDupAcks++;
             
@@ -769,7 +735,7 @@ static int scanPkts(int aggressive) {
          txSeqn = 0;
          /* FIXME: do i really want to kill these?!?!? */
          rdQHead = rdQTail = 0;
-         retxInit(1);
+         retxClear();
          connectUp();
          connectFlag=1;
       }
@@ -874,55 +840,38 @@ static int scanPkts(int aggressive) {
  *
  * if we _ever_ start to retx, we must stop sending
  * packets until the _entire_ retx queue is drained...
+ *
+ * we just reset the tx pointer now and call txFlush...
+ *
+ * how do we arrive at 800ms?
+ *
+ *   outstanding data on dor side:  16Kb
+ *   outstanding data on our side:   8kb
+ *   outstanding data on other dom:  8kb
+ *   -----------------------------------
+ *   total:                         32kb
+ *        we do 45kb/sec => 32/45=711ms
  */
 static int timeoutRetransmit(unsigned ticks) {
    /* retransmit all expired packets... */
-   RetxElt *elt;
-   const int tooOld = 100; /* 200ms */
-   int found = 0;
+   const unsigned tooOld = 400; /* 800ms */
 
-   do {
-      for (elt=retxTail; elt!=NULL; elt=elt->next) {
-         unsigned *pkt = elt->pkt;
-         const int dt = (int) ticks - (int) elt->ticks;
-
+   if (retx.tt != retx.t &&   /* anything in retx queue? */
+       ticks - retx.q[retxIndex(retx.t)].ticks > tooOld) { /* old packet? */
+      /* resend... */
 #if defined(DEBUGSERIAL) && 0
-         {  char msg[80];
-            snprintf(msg, sizeof(msg),
-                     "retx: seqn=%hu dt=%d", pktSeqn(*pkt), dt);
-            writeDebug(msg);
-         }
-#endif
-      
-         if (pkt!=NULL && dt > tooOld) {
-            const unsigned h = *pkt;
-
-#if defined(DEBUGSERIAL)
-            {  char msg[80];
-               snprintf(msg, sizeof(msg),
-                        "retx: seqn: %hu", pktSeqn(h));
-               writeDebug(msg);
-            }
-#endif
-            /* don't go on if there is no space in tx... */
-            if (!isHWPktSpace(h)) break;
-            
-            /* mark the time again and resend... */
-            found = 1;
-            elt->ticks = getTicks();
-            hal_FPGA_hwsend(pkt);
-            domStatsPkt.nTxPkts++;
-            domStatsPkt.nTxResentPkts++;
-         }
+      {  char msg[80];
+         snprintf(msg, sizeof(msg), "retx");
+         writeDebug(msg);
       }
-      if (found) {
-         /* try to clear these guys out... */
-         scanPkts(1);
-         ticks = getTicks();
-      }
-   } while (found && retxTail!=NULL);
+#endif
+      retx.i = retx.t;
+      txFlush();
+      scanPkts(1);  /* drop rx pkts on the floor to get to the acks... */
+      return 1;
+   }
 
-   return found;
+   return 0;
 }
 
 /* if the Rx fifo has data and the Rx queue is full
@@ -937,13 +886,16 @@ static void unstickRx(unsigned ticks) {
     */
    if (rdQFull() && hal_FPGA_hwmsg_ready()) {
       /* check for stale retx data */
-      RetxElt *elt;
+      unsigned short i;
       int found = 0;
 
-      for (elt=retxTail; !found && elt!=NULL; elt=elt->next) {
-         const unsigned short age = ticks - elt->ticks;
-         const unsigned short tooOld = 40; /* 80ms */
-         found = age>tooOld;
+      for (i=retx.t; !found && i!=retx.tt; i++) {
+         const int idx = retxIndex(i);
+         if (retx.q[idx].pkt!=NULL) {
+            const unsigned short age = ticks - retx.q[idx].ticks;
+            const unsigned short tooOld = 40; /* 80ms */
+            found = age>tooOld;
+         }
       }
       
       if (found) {
@@ -962,19 +914,24 @@ static void unstickRx(unsigned ticks) {
  * retransmitted packets, etc...
  */
 static void runPeriodic(void) {
-   {  static unsigned lastTicks;
-      const unsigned ticks = getTicks();
-      if (ticks!=lastTicks) {
-         timeoutRetransmit(ticks);
-         unstickRx(ticks);
-         lastTicks = ticks;
-      }
+   static unsigned lastTicks;
+   const unsigned ticks = getTicks();
+   if (ticks!=lastTicks) {
+      timeoutRetransmit(ticks);
+      unstickRx(ticks);
+      lastTicks = ticks;
    }
 }
 
 /* try to fill packet from read queue...
  *
- * *idx = new index into data
+ * FIXME: should be:
+ *   static int fillPkt(unsigned char *data, int *idx, int *type)
+ *
+ * where:
+ *   data is a pointer to the data to fill
+ *   idx is a pointer to the index of the next byte in data to fill
+ *   type is a pointer to the type of packet to fill
  *
  * returns: 0 packet not filled
  *          1 packet filled
@@ -1086,11 +1043,16 @@ int hal_FPGA_receive(int *type, int *len, char *msg) {
 }
 
 /* send a cooked packet... 
+ *
+ * there are two barriers to cross to get a packet on the wire.
+ *
+ * 1) get it in the retx buffer
+ * 2) get it on the hw queue
  */
 int hal_FPGA_send(int type, int len, const char *msg) {
    const unsigned char *data = (const unsigned char *) msg;
    int idx = 0;
-
+   
    writeDebugIndent("snd");
 
    waitConnected();
@@ -1118,7 +1080,6 @@ int hal_FPGA_send(int type, int len, const char *msg) {
 #else
       const int pktlen = nleft;
 #endif
-      RetxElt *elt = NULL;
 
       /* make sure there is space to send packet... */
       while (1) {
@@ -1131,7 +1092,9 @@ int hal_FPGA_send(int type, int len, const char *msg) {
             return 0;
          }
 
-         /* resend any old retx packets first... */
+         /* maybe packets need to be retx'd in order for them
+          * to be acked (and hence removed from the list)
+          */
          if (timeoutRetransmit(getTicks())) {
             /* may need to be more aggressive... */
             runPeriodic();
@@ -1139,64 +1102,45 @@ int hal_FPGA_send(int type, int len, const char *msg) {
          }
 
          /* try retx allocation... */
-         elt=retxAlloc();
-         if (elt==NULL) writeDebug("failed retxAlloc!");
-         else {
+         if (retx.h - retx.t == (unsigned short) lengthof(retx.q)) {
+            writeDebug("failed retxAlloc!");
+         }
+         else {  
             /* try tx allocation... */
-            if ((elt->pkt=txAlloc(pktlen))==NULL) {
+            const unsigned short i = retxIndex(retx.h);
+            unsigned *pkt;
+            
+            if ((pkt=retx.q[i].pkt=txAlloc(pktlen))==NULL) {
                writeDebug("failed txAlloc!");
-               retxDispose(elt);
-               elt = NULL;
+
+               /* no space for tx/retx, process packets until we're free... */
+               {  int ret = scanPkts(0);
+                  if (connectFlag) return 0;
+                  if (!ret) {
+                     flushAckQueue();
+                     runPeriodic();
+                  }
+               }
             }
-         }
+            else {
+               /* wrap up packet */
+               pkt[0] = pktMkHdr(pktlen, (pktlen==nleft) ? 2 : 0, txSeqn);
+               txSeqn++;
+               retx.h++;
+               memcpy(pkt + 1, data + idx, pktlen);
+               idx += pktlen;
 
-         /* is there space for the packet?
-          */
-         if (elt!=NULL && isHWPktSpace(pktlen)) break;
-
-         writeDebug("no pkt space");
-
-         /* no space for tx/retx, process packets until we're free... */
-         {
-            int ret = scanPkts(0);
-            if (connectFlag) return 0;
-            if (!ret) {
-               flushAckQueue();
-               runPeriodic();
+               break;
             }
          }
       }
-
-      /* wrap up packet */
-      elt->pkt[0] = pktMkHdr(pktlen, (pktlen==nleft) ? 2 : 0, txSeqn);
-      txSeqn++;
-      memcpy(elt->pkt + 1, data + idx, pktlen);
-      idx += pktlen;
-      
-      /* send it off on it's merry way... */
-#if defined(DEBUGSERIAL) && 0
-      {
-         char msg[80];
-         snprintf(msg, sizeof(msg),
-                  "tx data: %hu [%u]", pktSeqn(elt->pkt[0]), getTicks());
-         writeDebug(msg);
-      }
-#endif
-
-      /* mark the time it was sent... */
-      elt->ticks = getTicks();
-      
-      /* add it to the retx active list... */
-      retxInsert(elt);
-
-      /* it's been added to retransmit queue, we can go ahead and send it,
-       * the mem will be freed when (if) it is acked...
-       */
-      hal_FPGA_hwsend(elt->pkt);
-      domStatsPkt.nTxDataPkts++;
-      domStatsPkt.nTxPkts++;
    }
+   
+   /* send packets off... */
+   txFlush();
+
    debugUnindent();
+
    return 0;
 }
 
@@ -1260,10 +1204,3 @@ int  hal_FPGA_is_reboot_granted(void) {
 int hal_FPGA_is_comm_avail(void) {
    return RFPGABIT(COMM_STATUS, AVAIL)!=0;
 }
-
-
-
-
-
-
-

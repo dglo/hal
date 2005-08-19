@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_pld.h
  *
- * $Revision: 1.32.6.2 $
+ * $Revision: 1.35 $
  * $Author: arthur $
- * $Date: 2005-08-02 16:54:11 $
+ * $Date: 2005-08-19 07:30:46 $
  *
  * \b Usage:
  * \code
@@ -596,6 +596,14 @@ halGetBoardIDRaw(void);
  */
 void
 halUSleep(int us);
+
+/**
+ * busy wait ns nanoseconds.
+ *
+ * \param ns nanoseconds to busy wait.
+ */
+void
+halNanoSleep(unsigned ns);
 
 /**
  * read high voltage base serial number

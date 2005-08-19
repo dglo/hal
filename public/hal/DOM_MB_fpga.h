@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_fpga.h
  *
- * $Revision: 1.40.2.4 $
- * $Author: arthur $
- * $Date: 2005-05-16 21:41:59 $
+ * $Revision: 1.45 $
+ * $Author: jkelley $
+ * $Date: 2005-04-22 18:28:16 $
  *
  * \b Usage:
  * \code
@@ -140,6 +140,18 @@ hal_FPGA_TEST_trigger_forced(int trigger_mask);
 void
 hal_FPGA_TEST_trigger_disc(int trigger_mask);
 
+/**
+ * discriminator launch of the atwd/fadc...
+ * when LC is enabled
+ * \param trigger_mask bitmask of devices to trigger
+ *
+ * \see HAL_FPGA_TEST_TRIGGER_ATWD0
+ * \see HAL_FPGA_TEST_TRIGGER_ATWD1
+ * \see HAL_FPGA_TEST_TRIGGER_FADC
+ */
+void
+hal_FPGA_TEST_trigger_disc_lc(int trigger_mask);
+
 /** 
  * LED launch of the atwd/fadc...
  *
@@ -206,7 +218,7 @@ typedef enum {
    DOM_HAL_FPGA_TYPE_INVALID,
 
    /** Config boot fpga */
-   DOM_HAL_FPGA_TYPE_CONFIG,
+   DOM_HAL_FPGA_TYPE_CONFIGBOOT,
 
    /** Iceboot fpga */
    DOM_HAL_FPGA_TYPE_ICEBOOT,
@@ -258,6 +270,26 @@ typedef enum {
    /** placeholder, make sure new components go before this one... */
    DOM_HAL_FPGA_COMP_ALL = 0xffffffff,
 } DOM_HAL_FPGA_COMPONENTS;
+
+/**
+ * query fpga component version number.
+ *
+ * \param cmp fpga component specifier, \see DOM_HAL_FPGA_COMPONENTS
+ * \return build number or -1 on error
+ */
+int 
+hal_FPGA_query_component_version(DOM_HAL_FPGA_COMPONENTS cmp);
+
+/**
+ * query fpga expected component version number.
+ *
+ * \param type fpga type, \see DOM_HAL_FPGA_TYPES
+ * \param cmp fpga component specifier, \see DOM_HAL_FPGA_COMPONENTS
+ * \return expected build number or -1 on error
+ */
+int 
+hal_FPGA_query_component_expected(DOM_HAL_FPGA_TYPES type,
+                                  DOM_HAL_FPGA_COMPONENTS cmp);
 
 /**
  * check fpga version numbers.
@@ -415,18 +447,6 @@ hal_FPGA_TEST_get_ping_pong_clock(void);
  */
 void
 hal_FPGA_TEST_readout_ping_pong_done(void);
-
-/**
- * discriminator launch of the atwd/fadc...
- * when LC is enabled
- * \param trigger_mask bitmask of devices to trigger
- *
- * \see HAL_FPGA_TEST_TRIGGER_ATWD0
- * \see HAL_FPGA_TEST_TRIGGER_ATWD1
- * \see HAL_FPGA_TEST_TRIGGER_FADC
- */
-void
-hal_FPGA_TEST_trigger_disc_lc(int trigger_mask);
 
 
 /**
