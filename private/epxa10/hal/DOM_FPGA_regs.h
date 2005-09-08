@@ -86,6 +86,11 @@
 #define   DOM_FPGA_TEST_SIGNAL_RESPONSE_ATWD1     (0x00000100)
 /** acquisition of a fast adc signal is done */
 #define   DOM_FPGA_TEST_SIGNAL_RESPONSE_FADC_DONE (0x00010000)
+/** presence of local coincidence signal corresp. to ATWD0 */
+#define DOM_FPGA_TEST_SIGNAL_RESPONSE_ATWD0_LC (0x00000002)
+/** presence of local coincidence signal corresp. to ATWD1 */
+#define DOM_FPGA_TEST_SIGNAL_RESPONSE_ATWD1_LC (0x00000200)
+
 
 /*@}*/
 
@@ -94,7 +99,8 @@
  * \ingroup fpga_test_regs
  *
  * \brief We use this register to control communications.
- *  The pulser rate sits in bits 16-19.
+ *  The pulser rate sits in bits 16-19.  When bit bang mode
+ *  is set, writes to bits 24-31 get output to the DAC...
  */
 /*@{*/
 /** register address */
@@ -104,6 +110,8 @@
 #define   DOM_FPGA_TEST_COMM_DAC_TRIANGLE     (0x00000001)
 /** send a square wave out comm dac */
 #define   DOM_FPGA_TEST_COMM_DAC_SQUARE       (0x00000002)
+/** bit bang mode, access DAC directly */
+#define   DOM_FPGA_TEST_COMM_DAC_BIT_BANG     (0x00000004)
 /** acquire a comm adc signal */
 #define   DOM_FPGA_TEST_COMM_ADC              (0x00000010)
 /** ??? */
@@ -114,8 +122,6 @@
 #define   DOM_FPGA_TEST_COMM_RS_485_TX_ENABLE (0x00000400)
 /** ??? */
 #define   DOM_FPGA_TEST_COMM_RS_485_ENABLE    (0x00000800)
-
-
 /*@}*/
 
 /**
@@ -189,6 +195,12 @@
 #define   DOM_FPGA_TEST_MISC_LOCAL_UP           (0x00000001)
 /** switch on local coincidence with dom below */
 #define   DOM_FPGA_TEST_MISC_LOCAL_DOWN         (0x00000002)
+/** initiate upper/lower LC pulses when SPE disc. fires */
+#define   DOM_FPGA_TEST_MISC_LOCAL_SPE          (0x00000008)
+/** enable Rx from lower DOM - must use with DOM_FPGA_TEST_MISC_LOCAL_SPE */
+#define   DOM_FPGA_TEST_MISC_LOCAL_RX_LO        (0x00000010)
+/** enable Rx from upper DOM - must use with DOM_FPGA_TEST_MISC_LOCAL_SPE */
+#define   DOM_FPGA_TEST_MISC_LOCAL_RX_HI        (0x00000020)
 /** send high pulse to lower dom */
 #define   DOM_FPGA_TEST_MISC_LOCAL_DOWN_HIGH    (0x00000100)
 /** send low pulse to lower dom */
@@ -461,6 +473,23 @@ enum DOMPulserRates {
 /*@}*/
 
 /**
+ * \defgroup fpga_test_lcoin_launch_win Local Coin. window
+ * \ingroup fpga_test_regs
+ *
+ * \brief This memory address consists of 4 6-bit words defining
+ * local coincidence windows (in 50 nsec clock ticks)
+ * LC_up_pre_window: bits 5 - 0
+ * LC_up_post_window: bits 13 - 8
+ * LC_down_pre_window: bits 21 - 16
+ * LC_down_post_window: bits 29 - 24
+ */
+/*@{*/
+/** register addresss */
+#define DOM_FPGA_TEST_LOCOIN_LAUNCH_WIN (DOM_FPGA_TEST_BASE + 0x1068)
+/*@}*/
+
+
+/**
  * \defgroup fpga_test_rom_data ROM Configuration Data
  * \ingroup fpga_test_regs
  *
@@ -520,6 +549,15 @@ enum DOMPulserRates {
 #define DOM_FPGA_TEST_ATWD1_DATA (DOM_FPGA_TEST_BASE + 0x5000)
 /*@}*/
 
+/**
+ * \defgroup fpga_domapp_regs FPGA domapp Registers
+ *
+ * \brief Base address of the dom app registers
+ */
+/*@{*/
+#define DOM_FPGA_DOMAPP_BASE (DOM_FPGA_BASE + 0x0)
+/*@}*/
+ 
 /**
  * convenience macros
  */

@@ -80,6 +80,7 @@ void halWriteBaseDAC(USHORT value) {PMT_HV = value;}
 static UBYTE muxlookup;
 
 void halSelectAnalogMuxInput(UBYTE channel) { muxlookup = channel; }
+void halDisableAnalogMux(void) { }
 
 static BOOLEAN swapflash = 0;
 
@@ -201,6 +202,20 @@ void halUSleep(int us) {
    }
    
    /* usleep(us); */
+}
+
+void halNanoSleep(unsigned ns) {
+   struct timespec ts, rm;
+
+   ts.tv_sec = ns/1000000000;
+   ts.tv_nsec = ns%1000000000;
+
+   while (1) {
+      if (nanosleep(&ts, &rm)<0 && errno==EINTR) {
+	 ts = rm;
+      }
+      else return;
+   }
 }
 
 UBYTE *bufferBaseAddr;
@@ -406,14 +421,17 @@ halSimulIncReadoutIndex(void) {
 }
 
 int
-hal_FPGA_TEST_send(int type, int len, const char *msg) {
-    return 1;
+hal_FPGA_send(int type, int len, const char *msg) {
+   return write(1, msg, len);
 }
 
 int
-hal_FPGA_TEST_receive(int *type, int *len, char *msg) {
-    return 1;
+hal_FPGA_receive(int *type, int *len, char *msg) {
+   *len = read(0, msg, 4092);
+    return 0;
 }
+
+
 
 long long hal_FPGA_getClock() {
     return (long long)time(NULL);
@@ -475,8 +493,8 @@ hal_FPGA_TEST_get_local_clock(void) { return 123456;}
 
 int halIsFPGALoaded(void) { return 0; }
 
-void hal_FPGA_TEST_request_reboot(void){}
-int hal_FPGA_TEST_is_reboot_granted(void) { return 1; }
+void hal_FPGA_request_reboot(void){}
+int hal_FPGA_is_reboot_granted(void) { return 1; }
 
 void hal_FPGA_TEST_enable_ping_pong(void) {}
 unsigned long long hal_FPGA_TEST_get_atwd0_clock(void) {return 0ULL; }
@@ -520,8 +538,15 @@ void hal_FPGA_TEST_set_deadtime(int ns){}
 DOM_HAL_FPGA_TYPES hal_FPGA_query_type(void){ 
    return DOM_HAL_FPGA_TYPE_INVALID; 
 }
+int hal_FPGA_query_build(void){ 
+   return 0;
+}
 void hal_FPGA_TEST_start_FB_flashing(void) {}
 void hal_FPGA_TEST_stop_FB_flashing(void) {}
+void hal_FPGA_TEST_FB_set_aux_reset(void) {}
+void hal_FPGA_TEST_FB_clear_aux_reset(void) {}
+int hal_FPGA_TEST_FB_get_attn(void) {return 0;}
+void hal_FPGA_TEST_FB_set_rate(USHORT rate) { }
 
 void hal_FB_enable(void) {}
 void hal_FB_disable(void) {}
@@ -533,4 +558,18 @@ void hal_FB_set_brightness(UBYTE value) {}
 void hal_FB_enable_LEDs(USHORT enables) {}
 void hal_FB_select_mux_input(UBYTE value) {}
 int hal_FB_xsvfExecute(int *p, int nbytes) {return 0;}
+void hal_FB_enable_min(void) {}
+int hal_FB_isEnabled(void) { return 0; }
+void hal_FB_set_DCDCen(int val) { }
+int hal_FB_get_DCDCen(void) { return 0; }
+
+int hal_FPGA_query_component_expected(DOM_HAL_FPGA_TYPES type,
+                                      DOM_HAL_FPGA_COMPONENTS cmp) {
+   return -1;
+}
+
+int hal_FPGA_query_component_version(DOM_HAL_FPGA_COMPONENTS cmp) {
+   return -1;
+}
+
 

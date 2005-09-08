@@ -1,11 +1,13 @@
 /**
  * \file fb-hal.c
  *
- * $Revision: 1.4 $
+ * $Revision: 1.16 $
  * $Author: jkelley $
- * $Date: 2004-04-29 21:03:01 $
+ * $Date: 2005-05-02 20:16:58 $
  *
  * The DOM flasher board HAL.
+ *
+ * Modified 2005-1-22 Jacobsen - support adjustable rate and ATWD launch delay 
  *
  */
 #include <stddef.h>
@@ -13,40 +15,237 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "booter/epxa.h"
-
-#include "hal/DOM_MB_hal.h"
+#include "hal/DOM_MB_pld.h"
+#include "hal/DOM_MB_fb.h"
+#include "hal/DOM_MB_domapp.h"
+#include "hal/DOM_MB_fpga.h"
 #include "DOM_FB_regs.h"
 #include "fb-hal.h"
 
-void hal_FB_enable(void) {
+int getFBclock(void) {
+    return (((FB(CLK_HI) & 0xff) << 8) | (FB(CLK_LO) & 0xff));
+}
+
+static int fbIsPowered = 0;
+
+int hal_FB_enable(int *config_time, int *valid_time, int *reset_time, DOM_FPGA_TYPE fpga_type) {
+
+    /* Loop timeout limit for ATTN ack sequence, in us */
+    int ack_timeout = 50000;
+
+    /* Loop timeout limit for clock validation check, in us */
+    int vld_timeout = 500000;
+
+    /* Loop timeout limit for reset ack sequence, in us */
+    /* Note must be > ack_timeout + vld_timeout to make sense */
+    int rst_timeout = 600000;
+
+    /* Keep track of time required for reset sequence */
+    *config_time = 0;
+    *valid_time  = 0;
+    *reset_time  = 0;
 
     /* Enable the flasherboard interface in the mainboard CPLD */
     halEnableFlasher();
-    halUSleep(5000);
 
-    /* Reset the flasherboard CPLD */
-    FB(RESET) = 0x1;
-    halUSleep(5000);
+    unsigned long long reset_start_time;
+    if (fpga_type == DOM_FPGA_DOMAPP)
+        reset_start_time = hal_FPGA_DOMAPP_get_local_clock();
+    else
+        reset_start_time = hal_FPGA_TEST_get_local_clock();
 
-    /* Make sure all LEDs are off */
-    hal_FB_enable_LEDs(0);
+    /* Start FPGA ack reset sequence -- aux reset functions independently */
+    /* of 20MHz clock to test for CPLD configuration */
+    int attn, last_attn;
+    int state_cnt = 0;
+    int done = 0;
+
+    unsigned long long start_time;
+    if (fpga_type == DOM_FPGA_DOMAPP) {
+        start_time = hal_FPGA_DOMAPP_get_local_clock();    
+        last_attn = hal_FPGA_DOMAPP_FB_get_attn();
+    }
+    else {
+        start_time = hal_FPGA_TEST_get_local_clock();
+        last_attn = hal_FPGA_TEST_FB_get_attn();
+    }
+
+    while (!done) {
+        /* Aux_reset "clock" cycle */
+        if (fpga_type == DOM_FPGA_DOMAPP) {
+            hal_FPGA_DOMAPP_FB_set_aux_reset();
+            hal_FPGA_DOMAPP_FB_clear_aux_reset();
+            /* Monitor how long this is taking */
+            *config_time = (int)(hal_FPGA_DOMAPP_get_local_clock() - start_time) / 
+                (FPGA_HAL_TICKS_PER_SEC / 1000000);
+            /* Check for state change on ATTN */
+            attn = hal_FPGA_DOMAPP_FB_get_attn();
+        }
+        else {
+            hal_FPGA_TEST_FB_set_aux_reset();
+            hal_FPGA_TEST_FB_clear_aux_reset();
+            /* Monitor how long this is taking */
+            *config_time = (int)(hal_FPGA_TEST_get_local_clock() - start_time) / 
+                (FPGA_HAL_TICKS_PER_SEC / 1000000);
+            /* Check for state change on ATTN */
+            attn = hal_FPGA_TEST_FB_get_attn();
+        }
+
+        if (attn != last_attn) 
+            state_cnt++;
+
+        /* Watch for 4 state changes, ending in a zero state */
+        done = (*config_time > ack_timeout) || ((state_cnt >= 4) && (attn == 0));
+    }
+
+    if (*config_time > ack_timeout) {
+        if (fpga_type == DOM_FPGA_DOMAPP)
+            hal_FPGA_DOMAPP_FB_clear_aux_reset();
+        else
+            hal_FPGA_TEST_FB_clear_aux_reset();
+        hal_FB_disable();
+        return FB_HAL_ERR_CONFIG_TIME;
+    }
+
+    halUSleep(1000);
+
+    /* Validate that clock is running correctly */
+    done = 0;
+    if (fpga_type == DOM_FPGA_DOMAPP)
+        start_time = hal_FPGA_DOMAPP_get_local_clock();
+    else
+        start_time = hal_FPGA_TEST_get_local_clock();
+
+    int fb_clk_us;
+    int vld_cnt = 0;
+    unsigned long long stable_start = 0;
+    unsigned long long now, loop_start;
+    int stable_time = 0;
+
+    while (!done) {
+        if (fpga_type == DOM_FPGA_DOMAPP)
+            loop_start = hal_FPGA_DOMAPP_get_local_clock();
+        else
+            loop_start = hal_FPGA_TEST_get_local_clock();
+
+        /* Reset the flasherboard CPLD, and wait 250us */
+        FB(RESET) = 0x1;
+        halUSleep(250);
+
+        /* Check the FB counter */
+        fb_clk_us = getFBclock() / (FB_HAL_TICKS_PER_SEC / 1000000);
+        if (abs(fb_clk_us - 250) < 5) {
+            if (vld_cnt == 0)
+                stable_start = loop_start;
+            vld_cnt++;
+
+        }
+        else
+            vld_cnt = 0;
+
+        /* Monitor how long this is taking */
+        if (fpga_type == DOM_FPGA_DOMAPP)
+            now = hal_FPGA_DOMAPP_get_local_clock();
+        else
+            now = hal_FPGA_TEST_get_local_clock();
+
+        *valid_time = (int)(now - start_time) / (FPGA_HAL_TICKS_PER_SEC / 1000000);        
+        stable_time = (int)(now - stable_start) / (FPGA_HAL_TICKS_PER_SEC / 1000000);        
+        
+        /* Are we done? Check that clock is running and is stable */
+        done = (*valid_time > vld_timeout) || (vld_cnt == 8);
+    }
+    
+    if (*valid_time > vld_timeout) {
+        if (fpga_type == DOM_FPGA_DOMAPP)
+            hal_FPGA_DOMAPP_FB_clear_aux_reset();
+        else
+            hal_FPGA_TEST_FB_clear_aux_reset();
+        
+        hal_FB_disable();
+        return FB_HAL_ERR_VALID_TIME;
+    }
+
+    /* Correct valid time for stable period */
+    *valid_time -= stable_time;
+
+    /* Validate that the power-on reset has occurred */
+    done = 0;
+    int reset_ack = 0;
+    while (!done) {
+
+        /* Check the power-on reset ACK bit (active low) */
+        reset_ack = ((FB(VERSION) &  DOM_FB_VERSION_RESET_ACKN) == 0);
+
+        /* Monitor how long this is taking */
+        if (fpga_type == DOM_FPGA_DOMAPP) {
+            *reset_time = (int)(hal_FPGA_DOMAPP_get_local_clock() - reset_start_time) / 
+                (FPGA_HAL_TICKS_PER_SEC / 1000000);
+        }
+        else {
+            *reset_time = (int)(hal_FPGA_TEST_get_local_clock() - reset_start_time) / 
+                (FPGA_HAL_TICKS_PER_SEC / 1000000);
+        }
+        /* Are we done? Check that clock is running and is stable */
+        done = (*reset_time > rst_timeout) || (reset_ack);
+    }
+
+    if (*reset_time > rst_timeout) {
+        if (fpga_type == DOM_FPGA_DOMAPP)
+            hal_FPGA_DOMAPP_FB_clear_aux_reset();
+        else
+            hal_FPGA_TEST_FB_clear_aux_reset();
+        hal_FB_disable();
+        return FB_HAL_ERR_RESET_TIME;
+    }    
+
+    /* Wait a bit longer just to be sure clock is stable */
+    halUSleep(*valid_time / 5);
+    
+    /* Enable delay chip */
+    FB(LE_DP) = 0x1;
+
+    /* Initialize pulse width to something short */
+    hal_FB_set_pulse_width(64);
+
+    /* Toggle ATTN again to clear out LED pulse flip-flops */
+    if (fpga_type == DOM_FPGA_DOMAPP) {
+        hal_FPGA_DOMAPP_FB_set_aux_reset();
+        hal_FPGA_DOMAPP_FB_clear_aux_reset();
+    }
+    else {
+        hal_FPGA_TEST_FB_set_aux_reset();
+        hal_FPGA_TEST_FB_clear_aux_reset();
+    }
 
     /* Power on the DC-DC converter */
-    FB(DCDC_CTRL) = 0x1;   
-    halUSleep(5000);
+    hal_FB_set_DCDCen(1);
 
     /* Initialize mux selects (turn off mux as default) */
     hal_FB_select_mux_input(DOM_FB_MUX_DISABLE);
 
-    /* Turn off all LEDs */
-    hal_FB_enable_LEDs(0);
+    /* Initialize brightness to minimum */
+    hal_FB_set_brightness(0);
 
-    /* Initialize pulse width to zero */
-    hal_FB_set_pulse_width(0);
+    /* Wait a little while */
+    halUSleep(100000);
 
-    /* Enable delay chip */
-    FB(LE_DP) = 0x1;
+    fbIsPowered = 1;
+
+    return 0;
+}
+
+void hal_FB_enable_min(void) {
+
+    /* Enable the flasherboard interface in the mainboard CPLD */
+    halEnableFlasher();
+    halUSleep(100000);
+
+    /* Reset the flasherboard CPLD */
+    FB(RESET) = 0x1;
+    halUSleep(100000);
+
+    fbIsPowered = 1;
 }
 
 void hal_FB_disable(void) {
@@ -55,13 +254,28 @@ void hal_FB_disable(void) {
     hal_FB_enable_LEDs(0);
 
     /* Power off the DC-DC converter */
-    FB(DCDC_CTRL) = 0x1;   
+    hal_FB_set_DCDCen(0);
     halUSleep(5000);
 
     /* Disable the flasherboard interface in the mainboard CPLD */
     halDisableFlasher();
-    halUSleep(5000);
 
+    /* Wait a while */
+    halUSleep(200000);
+
+    fbIsPowered = 0;
+}
+
+void hal_FB_set_DCDCen(int val) {
+    FB(DCDC_CTRL) = 0x1 & val;
+}
+
+int hal_FB_get_DCDCen(void) {
+    return FB(DCDC_CTRL);
+}
+
+int hal_FB_isEnabled(void) {
+    return fbIsPowered;
 }
 
 static inline void waitOneWireBusy(void) { while (RFBBIT(ONE_WIRE, BUSY)) ; }
@@ -69,54 +283,64 @@ static inline void waitOneWireBusy(void) { while (RFBBIT(ONE_WIRE, BUSY)) ; }
 /*
  * Routine to read the unique serial number of the flasher board.
  */
-const char * hal_FB_get_serial(void) {
+int hal_FB_get_serial(char **id) {
     int i;
     const char *hexdigit = "0123456789abcdef";
-    const int sz = 64/4+1;    
     static BOOLEAN read = FALSE;
-    static char t[17];
-    
-    /* Only read out ID on first call */
-    if (read == FALSE) {
-        memset(t, 0, sz);
+    static unsigned char t[17];
+    unsigned char id_raw[8];
 
-        /* Make sure we start in normal mode */
-        /* There is funniness with state machine right after reset */
-        FB(MODE_SELECT) = 0x0;
-        halUSleep(5000);
-    
-        /* Put the CPLD in one-wire mode */
-        FB(MODE_SELECT) = 0x2;
-        halUSleep(5000);
+    /* Only read out ID on first call -- DISABLED FOR NOW */
+    if (read == FALSE) {
+        memset(t, 0, 17);
+        memset(id_raw, 0, 8);
+        *id = t;
 
         /* Reset one-wire */
-        FB(ONE_WIRE) = 0xf;
+        FB(ONE_WIRE) = 0x0f;
+        halUSleep(1000);
         waitOneWireBusy();
-    
+
+        /* Check for presence */
+        if (RFBBIT(ONE_WIRE, PRESENT) == 0)
+            return FB_HAL_ERR_ID_NOT_PRESENT;
+        
         for (i=0; i<8; i++) {
             FB(ONE_WIRE) = ( (0x33>>i) & 1 ) ? 0x9 : 0xa;
+            halUSleep(1000);
             waitOneWireBusy();
         }
-    
-        /* LSB comes out first, unlike HV id */
-        for (i=63; i>=0; i--) {
+        
+        /* LSB comes out first */
+        for (i=0; i<64; i++) {
             FB(ONE_WIRE) = 0xb;
             waitOneWireBusy();
-            t[i/4]>>=1;
+            id_raw[i/8]>>=1;
             if (RFBBIT(ONE_WIRE, DATA)) {
-                t[i/4] |= 0x8;
+                id_raw[i/8] |= 0x80;
             }
         }
-        
-        for (i=0; i<64/4; i++) t[i] = hexdigit[(int)t[i]];
-        
-        /* Put the CPLD back in normal mode */
-        FB(MODE_SELECT) = 0x0;
-        halUSleep(5000);
 
-        read = TRUE;
+        /* Only copy over result if passes CRC check */
+        /* halCheckCRC returns true on fail */
+        if (!halCheckCRC(id_raw, 8)) {
+            /* Translate binary char to ASCII hex digits */
+            for (i=7; i>=0; i--) {
+                t[2*(7-i)]   = hexdigit[(int)((id_raw[i]>>4) & 0xf)];
+                t[2*(7-i)+1] = hexdigit[(int)(id_raw[i] & 0xf)];
+            }
+
+            /* DISABLE -- read out every time for now */
+            /* read = TRUE; */
+        }
+        else {
+            /* Bad CRC */
+            strcpy(t, "deadbeef");
+            return FB_HAL_ERR_ID_BAD_CRC;
+        }
     }
-    return t;
+    
+    return 0;
 }
 
 /*
@@ -130,7 +354,8 @@ USHORT hal_FB_get_fw_version(void) {
  * Routine to get the flasher board layout version. 
  */
 USHORT hal_FB_get_hw_version(void) {
-    return FB(VERSION);
+    /* Mask out reset ack bit */
+    return (FB(VERSION) & ~DOM_FB_VERSION_RESET_ACKN);
 }
 
 /**
@@ -141,67 +366,14 @@ void hal_FB_set_pulse_width(UBYTE value) {
     FB(DELAY_ADJUST) = value;
 }
 
-/* 
- * SPI write: send a up to 32 bit value to the serial port.
- * Flasherboard chip can handle up to 10MHz (~500kHz used).
- */
-static void write_FB_SPI(int val, int bits) {
-    int mask;
-
-    /* Enable chip select (active low) */
-    FB(SPI_CTRL) &= ~FBBIT(SPI_CTRL, CSN);
-    halUSleep(1);
-    
-    for (mask=(1<<(bits-1)); mask>0; mask>>=1) {
-        const int dr = (val&mask) ? FBBIT(SPI_CTRL, MOSI) : 0;
-        
-        /* set data bit, clock low...
-         */
-        FB(SPI_CTRL) = dr;
-        halUSleep(1);
-        
-        /* clock it in...
-         */
-        FB(SPI_CTRL) = dr | FBBIT(SPI_CTRL, SCLK);
-        halUSleep(1);
-    }
-    
-    /* Disable chip select */
-    FB(SPI_CTRL) = FBBIT(SPI_CTRL, CSN);
-}
-
-/*
- * Write to the MAXIM 5348
- */
-static void max5438Write(int val) {           
-    /* send 7 bit serial value:
-     *
-     * data[6..0] (MSB first)
-     */
-    write_FB_SPI((val&0x7f), 7);
-}
-
 /**
  * Routine that sets the flash brightness for all LEDs
  * on the flasher board.
  */
 void hal_FB_set_brightness(UBYTE value) {
-
-    /* Make sure we start in normal mode */
-    /* There is funniness with state machine */
-    FB(MODE_SELECT) = 0x0;
-    halUSleep(5000);
-
-    /* Put the CPLD in SPI mode */
-    FB(MODE_SELECT) = 0x1;
-    halUSleep(5000);
-
-    /* Write the value */
-    max5438Write(value);
-
-    /* Put the CPLD back in normal mode */
-    FB(MODE_SELECT) = 0x0;
     
+    FB(SPI_CTRL) = value;
+    halUSleep(10000);
 }
 
 /**
@@ -1769,4 +1941,3 @@ int hal_FB_xsvfExecute(int *p, int nbytes)
 
     return( XSVF_ERRORCODE(xsvfInfo.iErrorCode) );
 }
-

@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_pld.h
  *
- * $Revision: 1.32 $
+ * $Revision: 1.35 $
  * $Author: arthur $
- * $Date: 2004-05-18 21:36:29 $
+ * $Date: 2005-08-19 07:30:46 $
  *
  * \b Usage:
  * \code
@@ -542,6 +542,13 @@ void
 halSelectAnalogMuxInput(UBYTE channel);
 
 /**
+ * disables analog mux
+ */
+void
+halDisableAnalogMux(void);
+
+
+/**
  * set swap flash memory chips...
  *
  * \see halClrSwapFlashChips
@@ -591,6 +598,14 @@ void
 halUSleep(int us);
 
 /**
+ * busy wait ns nanoseconds.
+ *
+ * \param ns nanoseconds to busy wait.
+ */
+void
+halNanoSleep(unsigned ns);
+
+/**
  * read high voltage base serial number
  *
  * \return serial number as a string or NULL on error...
@@ -605,6 +620,18 @@ halHVSerial(void);
  */
 unsigned long long
 halHVSerialRaw(void);
+
+/**
+ * Perform Dallas one-wire CRC check on an 
+ * HV or FB serial number.
+ *
+ * \param buf ID string
+ * \param len length of ID string
+ *
+ * \return 0 if OK, nonzero otherwise
+ */
+int 
+halCheckCRC(unsigned char buf[], int len);
 
 /**
  * check to see if fpga is loaded

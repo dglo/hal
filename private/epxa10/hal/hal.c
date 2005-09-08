@@ -2,6 +2,8 @@
  * \file hal.c, the cpld dom hal.
  */
 #include <stddef.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "hal/DOM_MB_hal.h"
 #include "hal/DOM_PLD_regs.h"
@@ -10,11 +12,14 @@
 
 #include "dom-cpld/pld-version.h"
 
+/* use the 3.3V Vdd reference voltage for the max1139?
+ */
+#undef USE_VREF_3_3
+#define USE_VREF_3_3
+
 static void max5250Write(int chan, int val);
 static void max525Write(int chan, int val);
 static void max534Write(int chan, int val);
-
-static int max146Read(int chan);
 
 static void startI2C(void);
 static void stopI2C(void);
@@ -87,7 +92,27 @@ USHORT halReadADC(UBYTE channel) {
     */
    static int init = 0;
    if (!init) { max1139Read(channel/12, channel % 12); init = 1; }
+
+#if defined(USE_VREF_3_3)
+   /* we've moved the internal reference to Vdd (3.3V), two reprocussions:
+    *
+    * 1) we need to average a few samples together now to get a decent
+    *    reading.
+    * 2) we need to rescale the counts by new_counts=counts*2048/3300
+    */
+   {
+      unsigned sum = 0;
+      int i;
+      const int n = 8;
+      for (i=0; i<n; i++) {
+         sum += max1139Read(channel/12, channel % 12);
+      }
+   
+      return sum * 3300 / (2048 * n);
+   }
+#else
    return max1139Read(channel/12, channel % 12);
+#endif
 }
 
 static int daclookup[DOM_HAL_NUM_DAC_CHANNELS];
@@ -244,6 +269,10 @@ void halSelectAnalogMuxInput(UBYTE chan) {
    PLD(MUX_CONTROL) = cs | (addr<<2);
 }
 
+void halDisableAnalogMux(void) {
+    PLD(MUX_CONTROL) = 0x00;
+}
+
 void halSetSwapFlashChips(void) {
    PLD(BOOT_CONTROL) = 
       PLDBIT(BOOT_CONTROL, ALTERNATE_FLASH) |
@@ -273,6 +302,9 @@ void halDisableBarometer(void) {
 static int hvIsPowered = 0;
 
 void halPowerUpBase(void) {
+   /* don't power up if we're already powered... */
+   if (hvIsPowered) return;
+   
    /* ltc1257 requires cs0 to be low on power up...
     */
    PLD(SPI_CHIP_SELECT1) = 0; 
@@ -299,6 +331,9 @@ void halPowerUpBase(void) {
 }
 
 void halPowerDownBase(void) {
+   /* don't power down if we're already unpowered... */
+   if (hvIsPowered==0) return;
+   
    /* drop disable */
    halEnableBaseHV();
    
@@ -370,12 +405,12 @@ void halDisableSerialDSR() {
 BOOLEAN halSerialDSRState() { return RPLDBIT(UART_STATUS, SERIAL_DSR); }
 
 void halBoardReboot() {
-   if (halIsFPGALoaded() && hal_FPGA_TEST_is_comm_avail()) {
-      hal_FPGA_TEST_request_reboot();
+   if (halIsFPGALoaded() && hal_FPGA_is_comm_avail()) {
+      hal_FPGA_request_reboot();
 
       /* we can't reboot unless we're granted a reboot...
        */
-      while (!hal_FPGA_TEST_is_reboot_granted()) ;
+      while (!hal_FPGA_is_reboot_granted()) ;
    }
    
    PLD(REBOOT_CONTROL) = PLDBIT(REBOOT_CONTROL, INITIATE_REBOOT);
@@ -516,6 +551,15 @@ static void waitus(int us) {
 
 void halUSleep(int us) { waitus(us); }
 
+/* good to 1GHz, Fmax of ARM core is 200MHz...
+ */
+void halNanoSleep(unsigned ns) {
+   unsigned long long psperclk = 1000000000000ULL / AHB1;
+   const unsigned ticks = ns * 1000 / (unsigned) psperclk;
+   const unsigned v = *(volatile unsigned *)(REGISTERS + 0x328);
+   while ( (*(volatile unsigned *)(REGISTERS + 0x328)) - v < ticks ) ;
+}
+
 /* send a up to 32 bit value to the serial port...
  * assume chips can handle 1MHz
  */
@@ -597,26 +641,6 @@ static void max534Write(int chan, int val) {
     * a[1..0] c[1..0] data[7..0]
     */
    writeSPI( ((chan&3)<<10) | (0x3<<8) | (val&0xff), 12);
-}
-
-/* read from max146...
- *
- * 8 channel 12-bit ADC
- */
-static int max146Read(int chan) {
-   const int cw = 0x80 | ((chan&7)<<4) | 0xe;
-
-   /* write control word...
-    */
-   writeSPI(cw, 8);
-
-   /* make sure conversion is done...
-    */
-   waitus(10);
-
-   /* read out results...
-    */
-   return readSPI(16, PLDBIT(SPI_READ_DATA, MISO_DATA_SC))>>4; 
 }
 
 /* i2c start condition...
@@ -917,76 +941,72 @@ static int readLTC1286(void) {
    return ret&0x0fff;
 }
 
-static void ows8(int b) {
-   int i;
-   for (i=0; i<8; i++) {
-      PLD(ONE_WIRE) = ( (b>>i) & 1 ) ? 0x9 : 0xa;
-      halUSleep(100);
-   }
-}
-
 static void waitBusy(void) { while (RPLDBIT(ONE_WIRE, BUSY)) ; }
 
 /* use halHVSerialRaw (when it's ready)...
  */
+
+/*
+ * 2004-07-14 k. hanson
+ * see my posting to icebug of earlier message by 
+ * nobuyoshi kitamura on 2004-07-09 that deals with
+ * this problem - the Dallas DS2401 has extra info
+ * aside from serial # in the readout image:
+ *   1 Byte | 6 Byte |   1 Byte
+ *  --------+--------+------------
+ *     CRC  |   ID   | FAMILY CODE
+ * so i added support to check CRC validity (retry
+ * 5 times) and to only emit the 6-byte serial ID
+ * as a 12-character hexadecimal string.
+ */
 const char *halHVSerial(void) {
-   int i;
-   const char *hexdigit = "0123456789abcdef";
-   static char t[64/4+1];
-   static int isInit = 0;
-   
-   if (!isInit && hvIsPowered) {
-      PLD(ONE_WIRE) = 0xf;
-      waitBusy();
-      
-      for (i=0; i<8; i++) {
-         PLD(ONE_WIRE) = ( (0x33>>i) & 1 ) ? 0x9 : 0xa;
-         waitBusy();
-      }
-      
-      for (i=0; i<64; i++) {
-         PLD(ONE_WIRE) = 0xb;
-         waitBusy();
-         t[i/4]<<=1;
-         if (RPLDBIT(ONE_WIRE, DATA)) {
-            t[i/4] |= 1;
-         }
-      }
-      
-      for (i=0; i<64/4; i++) t[i] = hexdigit[(int)t[i]];
-      
-      isInit = 1;
+   static char t[13];
+   int shift = 44, i = 0;
+   const unsigned long long id = halHVSerialRaw();
+   while (shift>=0) {
+      const char *digit = "0123456789abcdef";
+      t[i] = digit[(id>>shift)&0xf];
+      shift -= 4;
+      i++;
    }
-   
    return t;
 }
 
 unsigned long long halHVSerialRaw(void) {
-   static unsigned long long id;
+   static unsigned long long hvid = 0L;
    static int isInit = 0;
    
-   if (!isInit) {
-      int i;
+   if (!isInit && hvIsPowered) {
 
-      PLD(ONE_WIRE) = 0xf;
-      waitBusy();
+      int retry = 0;
+      unsigned char id[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
-      for (i=0; i<8; i++) {
-         PLD(ONE_WIRE) = ( (0x33>>i) & 1 ) ? 0x9 : 0xa;
-         waitBusy();
-      }
+      do {
+	 int i;
+	 PLD(ONE_WIRE) = 0xf;
+	 waitBusy();
       
-      id = 0;
-      for (i=0; i<64; i++) {
-         id<<=1;
-         PLD(ONE_WIRE) = 0xb;
-         if (RPLDBIT(ONE_WIRE, DATA)) id |= 1;
-      }
+	 for (i=0; i<8; i++) {
+	    PLD(ONE_WIRE) = ( (0x33>>i) & 1 ) ? 0x9 : 0xa;
+	    waitBusy();
+	 }
       
-      isInit = 1;
+	 for (i=0; i<64; i++) {
+	    PLD(ONE_WIRE) = 0xb;
+	    waitBusy();
+	    id[i/8] >>= 1;
+	    if (RPLDBIT(ONE_WIRE, DATA)) {
+	       id[i/8] |= 0x80;
+	    }
+	 }
+      } while (halCheckCRC(id, 8) && retry++ < 5);
+      if (retry < 5) {
+	 memcpy(&hvid, id+1, 6);
+	 isInit = 1;
+      }
    }
    
-   return id;
+   return hvid;
 }
 
 int halIsFPGALoaded(void) { return RPLDBIT(MISC, FPGA_LOADED)==0; }
@@ -998,6 +1018,11 @@ static unsigned char adcCLKHigh(void) {
    return PLDBIT(SPI_CTRL, DAC_CL)|PLDBIT(SPI_CTRL, SERIAL_CLK); 
 }
 
+
+/* 1/2 period of the clock for 1139 chip 4us = 250KHz...
+ */
+#define TCLK1139  (4/2)
+
 /* i2c start condition...
  *
  * no assumptions about clock
@@ -1008,15 +1033,15 @@ static void startMax1139(int cs) {
    /* both high... */
    PLD(SPI_CHIP_SELECT0) = adcCSHigh(cs);
    PLD(SPI_CTRL) = adcCLKHigh();
-   waitus(1);
+   waitus(TCLK1139);
    
    /* drop data... */
    PLD(SPI_CHIP_SELECT0) = adcCSLow(cs);
-   waitus(1);
+   waitus(TCLK1139);
 
    /* drop clock... */
    PLD(SPI_CTRL) = adcCLKLow();
-   waitus(1);
+   waitus(TCLK1139);
 }
 
 /* i2c stop condition...
@@ -1029,17 +1054,17 @@ static void stopMax1139(int cs) {
    /* data goes low...
     */
    PLD(SPI_CHIP_SELECT0) = adcCSLow(cs);
-   waitus(1);
+   waitus(TCLK1139);
 
    /* now clock goes high...
     */
    PLD(SPI_CTRL) = adcCLKHigh();
-   waitus(1);
+   waitus(TCLK1139);
 
    /* now raise data to signal stop...
     */
    PLD(SPI_CHIP_SELECT0) = adcCSHigh(cs);
-   waitus(1);
+   waitus(TCLK1139);
 }
 
 /* i2c routines...
@@ -1061,19 +1086,19 @@ static void writeMax1139Byte(int cs, int val) {
        */
       PLD(SPI_CHIP_SELECT0) = bit;
       PLD(SPI_CTRL) = adcCLKHigh();
-      waitus(1);
+      waitus(TCLK1139);
 
       /* drop the clock and wait...
        */
       PLD(SPI_CTRL) = adcCLKLow();
-      waitus(1);
+      waitus(TCLK1139);
    }
 
    /* get ack, drop clock, wait, raise clock, wait, sample...
     */
    PLD(SPI_CHIP_SELECT0) = adcCSHigh(cs);
    PLD(SPI_CTRL) = adcCLKHigh();
-   waitus(1);
+   waitus(TCLK1139);
    
    ack = PLD(SPI_CHIP_SELECT0) & (1<<(cs+5));
 
@@ -1083,7 +1108,7 @@ static void writeMax1139Byte(int cs, int val) {
     */
 
    PLD(SPI_CTRL) = adcCLKLow();
-   waitus(1);
+   waitus(TCLK1139);
 }
 
 /* assume clock is low on entry
@@ -1101,14 +1126,14 @@ static int readMax1139Byte(int cs, int ack) {
    for (i=0; i<8; i++) {
       /* raise clock... */
       PLD(SPI_CTRL) = adcCLKHigh();
-      waitus(1);
+      waitus(TCLK1139);
       
       /* read data... */
       val = (val<<1) | ( (PLD(SPI_CHIP_SELECT0) & (1<<(cs+5))) ? 1 : 0 );
 
       /* drop clock... */
       PLD(SPI_CTRL) = adcCLKLow();
-      waitus(1);
+      waitus(TCLK1139);
    }
    
    /* send nack...
@@ -1117,10 +1142,10 @@ static int readMax1139Byte(int cs, int ack) {
    else PLD(SPI_CHIP_SELECT0) = adcCSLow(cs);
 
    PLD(SPI_CTRL) = adcCLKHigh();
-   waitus(1);
+   waitus(TCLK1139);
 
    PLD(SPI_CTRL) = adcCLKLow();
-   waitus(1);
+   waitus(TCLK1139);
 
    return val;
 }
@@ -1131,7 +1156,13 @@ static int max1139Read(int cs, int ch) {
    /* set channel to readout... */
    startMax1139(cs);
    writeMax1139Byte(cs, 0x6a); /* 0110 1010 */
+
+#if defined(USE_VREF_3_3)
+   writeMax1139Byte(cs, 0x88); /* 1000 1000 -- */
+#else
    writeMax1139Byte(cs, 0xD8); /* 1101 1000 */
+#endif
+
    writeMax1139Byte(cs, (ch<<1) | 0x61); /* 0110 0000 */
    stopMax1139(cs);
 
@@ -1154,3 +1185,53 @@ int halIsInputData(void) {
    return hal_FPGA_TEST_msg_ready();
 }
 
+/*
+ * Compute the Dallas 1-Wire CRC of a stream of bytes.
+ * Returns 0 on success, 1 on error.
+ */
+int halCheckCRC(unsigned char s[], int length) {
+    /*
+     * This table taken from page 131 of
+     * The DS19XX Book of iButton Standards
+     *     http://www.ibutton.com/ibuttons/standard.pdf
+     */
+    static unsigned char crctab[256] = { 
+	0, 94, 188, 226, 97, 63, 221, 131, 
+	194, 156, 126, 32, 163, 253, 31, 65,
+	157, 195, 33, 127, 252, 162, 64, 30,
+	95, 1, 227, 189, 62, 96, 130, 220,
+	35, 125, 159, 193, 66, 28, 254, 160, 
+	225,191, 93,3, 128, 222, 60, 98,
+	190, 224, 2, 92, 223, 129, 99, 61, 
+	124, 34, 192,158, 29, 67, 161, 255,
+	70, 24, 250, 164, 39, 121, 155, 197, 
+	132, 218, 56, 102, 229, 187, 89, 7,
+	219, 133, 103, 57, 186, 228, 6, 88, 
+	25, 71, 165, 251, 120, 38, 196, 154,
+	101, 59, 217, 135, 4, 90, 184, 230, 
+	167, 249, 27, 69, 198, 152, 122, 36,
+	248, 166, 68, 26, 153, 199, 37, 123, 
+	58, 100, 134, 216, 91, 5, 231, 185,
+	140, 210, 48, 110, 237, 179, 81, 15, 
+	78, 16, 242, 172, 47, 113, 147, 205,
+	17, 79, 173, 243, 112, 46, 204, 146, 
+	211, 141, 111, 49, 178, 236, 14, 80,
+	175, 241, 19, 77, 206, 144, 114, 44, 
+	109, 51, 209, 143, 12, 82, 176, 238,
+	50, 108, 142, 208, 83, 13, 239, 177, 
+	240, 174, 76, 18, 145, 207, 45, 115,
+	202, 148, 118, 40, 171, 245, 23, 73, 
+	8, 86, 180, 234, 105, 55, 213, 139,
+	87, 9, 235, 181, 54, 104, 138, 212, 
+	149, 203, 41, 119, 244, 170, 72, 22,
+	233, 183, 85, 11, 136, 214, 52, 106, 
+	43, 117, 151, 201, 74, 20, 246, 168,
+	116, 42, 200, 150, 21, 75, 169, 247, 
+	182, 232, 10, 84, 215, 137, 107, 53
+    };
+    int i;
+    int crc = 0;
+    for (i = 0; i < length; i++) 
+	crc = crctab[crc ^ s[i]];
+    return (crc != 0);
+}

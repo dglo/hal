@@ -156,6 +156,22 @@ void hal_FPGA_TEST_trigger_disc(int trigger_mask) {
    FPGA(TEST_SIGNAL) = clearLaunch() | reg;
 }
 
+void hal_FPGA_TEST_trigger_disc_lc(int trigger_mask) {
+  /** This slightly kludgy reimplementation is required because
+      Thorsten reinterprets TEST_SIGNAL_FADC when LC is enabled. */
+  unsigned reg = 0;
+  if (trigger_mask & HAL_FPGA_TEST_TRIGGER_ATWD0)
+    reg |= FPGABIT(TEST_SIGNAL, ATWD0_DISC);
+  if (trigger_mask & HAL_FPGA_TEST_TRIGGER_ATWD1)
+    reg |= FPGABIT(TEST_SIGNAL, ATWD1_DISC);
+  if (trigger_mask & HAL_FPGA_TEST_TRIGGER_FADC)
+    reg |= FPGABIT(TEST_SIGNAL, FADC);
+
+  reg |= waveformTriggers(trigger_mask);
+
+  FPGA(TEST_SIGNAL) = clearLaunch() | reg;
+}
+
 void hal_FPGA_TEST_trigger_LED(int trigger_mask) {
    unsigned reg = 0;
    if (trigger_mask & HAL_FPGA_TEST_TRIGGER_ATWD0) 
@@ -168,6 +184,67 @@ void hal_FPGA_TEST_trigger_LED(int trigger_mask) {
    reg |= waveformTriggers(trigger_mask);
 
    FPGA(TEST_SIGNAL) = clearLaunch() | reg;
+}
+
+/* map a hal component to a index in the array or -1 on error... */
+static int cmpIdx(DOM_HAL_FPGA_COMPONENTS cmp) {
+   #define DECL_FPGA_COMP(a) DOM_HAL_FPGA_COMP_##a, FPGA_VERSIONS_##a
+   const struct {
+      DOM_HAL_FPGA_COMPONENTS cmp;
+      int idx;
+   } map[] = {
+      { DECL_FPGA_COMP(COM_FIFO) },
+      { DECL_FPGA_COMP(COM_DP) },
+      { DECL_FPGA_COMP(DAQ) },
+      { DECL_FPGA_COMP(PULSERS) },
+      { DECL_FPGA_COMP(DISCRIMINATOR_RATE) },
+      { DECL_FPGA_COMP(LOCAL_COINC) },
+      { DECL_FPGA_COMP(FLASHER_BOARD) },
+      { DECL_FPGA_COMP(TRIGGER) },
+      { DECL_FPGA_COMP(LOCAL_CLOCK) },
+      { DECL_FPGA_COMP(SUPERNOVA) }
+   };
+   #undef DECL_FPGA_COMP
+   const int nmap = sizeof(map) / sizeof(map[0]);
+   int i;
+   for (i=0; i<nmap; i++) if (map[i].cmp==cmp) return map[i].idx;
+   return -1;
+}
+
+/* map a hal component to a index in the array or -1 on error... */
+static int typeIdx(DOM_HAL_FPGA_TYPES type) {
+   #define DECL_FPGA_TYPE(a) DOM_HAL_FPGA_TYPE_##a, FPGA_VERSIONS_TYPE_##a
+   const struct {
+      DOM_HAL_FPGA_COMPONENTS type;
+      int idx;
+   } map[] = {
+      { DECL_FPGA_TYPE(INVALID) },
+      { DECL_FPGA_TYPE(STF_COM) },
+      { DECL_FPGA_TYPE(DOMAPP) },
+      { DECL_FPGA_TYPE(CONFIGBOOT) },
+      { DECL_FPGA_TYPE(ICEBOOT) },
+      { DECL_FPGA_TYPE(STF_NOCOM) }
+   };
+   #undef DECL_FPGA_TYPE
+   const int nmap = sizeof(map) / sizeof(map[0]);
+   int i;
+   for (i=0; i<nmap; i++) if (map[i].type==type) return map[i].idx;
+   return -1;
+}
+
+/* return component version number... */
+int hal_FPGA_query_component_version(DOM_HAL_FPGA_COMPONENTS cmp) {
+   const unsigned *rom = (const unsigned *) DOM_FPGA_VERSIONING;
+   const int idx = cmpIdx(cmp);
+   if (idx<0) return -1;
+   return rom[idx];
+}
+
+
+/* return component version number... */
+int hal_FPGA_query_component_expected(DOM_HAL_FPGA_TYPES type,
+                                      DOM_HAL_FPGA_COMPONENTS cmp) {
+   return expected_versions[typeIdx(type)][cmpIdx(cmp)];
 }
 
 static int chkcomp(int mask, unsigned comps, 
@@ -192,7 +269,7 @@ hal_FPGA_query_versions(DOM_HAL_FPGA_TYPES type, unsigned comps) {
    int mask = 0;
 
    /** Config boot fpga */
-   if (type==DOM_HAL_FPGA_TYPE_CONFIG) {
+   if (type==DOM_HAL_FPGA_TYPE_CONFIGBOOT) {
       if (rom[0]!=FPGA_VERSIONS_TYPE_CONFIGBOOT) return -1;
    }
    else if (type==DOM_HAL_FPGA_TYPE_ICEBOOT) {
@@ -248,12 +325,12 @@ hal_FPGA_query_versions(DOM_HAL_FPGA_TYPES type, unsigned comps) {
 }
 
 int hal_FPGA_query_build(void) { 
-   const short *rom = (const short *) DOM_FPGA_VERSIONING;
+   const unsigned *rom = (const unsigned *) DOM_FPGA_VERSIONING;
    return rom[1] | rom[2]<<16;
 }
 
 DOM_HAL_FPGA_TYPES hal_FPGA_query_type(void) { 
-   const short *rom = (const short *) DOM_FPGA_VERSIONING;
+   const unsigned *rom = (const unsigned *) DOM_FPGA_VERSIONING;
 
    if (rom[0]==FPGA_VERSIONS_TYPE_STF_COM) {
       return DOM_HAL_FPGA_TYPE_STF_COM;
@@ -262,7 +339,7 @@ DOM_HAL_FPGA_TYPES hal_FPGA_query_type(void) {
       return DOM_HAL_FPGA_TYPE_DOMAPP;
    }
    else if (rom[0]==FPGA_VERSIONS_TYPE_CONFIGBOOT) {
-      return DOM_HAL_FPGA_TYPE_CONFIG;
+      return DOM_HAL_FPGA_TYPE_CONFIGBOOT;
    }
    else if (rom[0]==FPGA_VERSIONS_TYPE_ICEBOOT) {
       return DOM_HAL_FPGA_TYPE_ICEBOOT;
@@ -414,7 +491,8 @@ void hal_FPGA_TEST_disable_LED(void) {
 
 void hal_FPGA_TEST_set_atwd_LED_delay(int delay) {
     /* Only low 4 bits used */
-    FPGA(TEST_LED_ATWD_DELAY) = (delay & 0xf);
+    FPGA(TEST_LED_ATWD_DELAY) = 
+       (FPGA(TEST_LED_ATWD_DELAY)&0xf) | (delay & 0xf);
 }
 
 void hal_FPGA_TEST_start_FB_flashing(void) {
@@ -423,6 +501,36 @@ void hal_FPGA_TEST_start_FB_flashing(void) {
 
 void hal_FPGA_TEST_stop_FB_flashing(void) {
     FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, FL_TRIGGER);
+}
+
+void hal_FPGA_TEST_FB_set_aux_reset(void) {
+    FPGA(TEST_MISC) |=  FPGABIT(TEST_MISC, FL_PRE_TRIGGER);
+}
+
+void hal_FPGA_TEST_FB_clear_aux_reset(void) {
+    FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, FL_PRE_TRIGGER);
+}
+
+int hal_FPGA_TEST_FB_get_attn(void) {
+    if (FPGA(TEST_MISC_RESPONSE) & FPGABIT(TEST_MISC_RESPONSE, FL_ATTN))
+        return 1;
+    else
+        return 0;
+}
+
+void hal_FPGA_TEST_FB_set_rate(USHORT rate) {
+    /* Sets flasher board rate -- minimum 1 Hz, max. 610 Hz */
+#define NRATES 10
+    USHORT table[NRATES] = { 610, 305, 153, 76, 38, 19, 10, 5, 2, 1 };
+    UBYTE ratebits = 0;
+    int it;
+    for(it=NRATES-1;it>0;it--) {
+        if(rate <= table[it]) {
+            ratebits = it; break;
+        }
+    }
+    FPGA(TEST_COMM) = FPGA(TEST_COMM) & ~(0xF<<16);
+    FPGA(TEST_COMM) = FPGA(TEST_COMM) | ((ratebits&0xF)<<16);
 }
 
 void hal_FPGA_TEST_FB_JTAG_enable(void) {
@@ -512,3 +620,73 @@ void hal_FPGA_TEST_set_deadtime(int ns) {
       (FPGA(TEST_LED_ATWD_DELAY) & (~0xf000)) | (i<<12);
 }
 
+void hal_FPGA_TEST_comm_bit_bang_dac(int v) {
+   /* FIXME: only on stf no comm! */
+   FPGA(TEST_COMM) = FPGABIT(TEST_COMM, DAC_BIT_BANG) | (v<<24);
+}
+
+int hal_FPGA_TEST_atwd0_has_lc(void) {
+  return RFPGABIT(TEST_SIGNAL_RESPONSE, ATWD0_LC) ? 1 : 0;
+}
+
+int hal_FPGA_TEST_atwd1_has_lc(void) {
+  return RFPGABIT(TEST_SIGNAL_RESPONSE, ATWD1_LC) ? 1 : 0;
+}
+
+
+#define WINDOW_BITS  6
+#define TICKTIME_NS  ((1000000000 / FPGA_HAL_TICKS_PER_SEC)*2)
+
+/** JJ: Thorsten informs me that 0x3F is disallowed, hence -2: */
+#define MAXWINDOW    ((1<<WINDOW_BITS)-2) 
+/** (1<<6 - 2) * 50 = 3100: */
+#define MAXWINDOW_NS (MAXWINDOW*TICKTIME_NS) 
+
+int hal_FPGA_TEST_set_lc_launch_window(int up_pre_ns,
+				       int up_post_ns,
+				       int down_pre_ns,
+				       int down_post_ns) {
+  if(   up_pre_ns    < 0
+	|| up_post_ns   < 0
+	|| down_pre_ns  < 0
+	|| down_post_ns < 0
+	|| up_pre_ns    > MAXWINDOW_NS
+	|| up_post_ns   > MAXWINDOW_NS
+	|| down_pre_ns  > MAXWINDOW_NS
+	|| down_post_ns > MAXWINDOW_NS) return 1;
+  
+  /* Clear window bits */
+  FPGA(TEST_LOCOIN_LAUNCH_WIN) &= ~(0x3F3F3F3F);
+  /* Set window bits appropriately */
+  FPGA(TEST_LOCOIN_LAUNCH_WIN)
+    |= ((up_pre_ns/TICKTIME_NS)   &0x3F)
+    |  ((up_post_ns/TICKTIME_NS)  &0x3F)<<8
+    |  ((down_pre_ns/TICKTIME_NS) &0x3F)<<16
+    |  ((down_post_ns/TICKTIME_NS)&0x3F)<<24;
+  
+  return 0;
+}
+
+int hal_FPGA_TEST_spe_lc_enabled(int * ena_lo, int * ena_hi) {
+  /** If LC enabled, return 1, else 0.  Also, if LC enabled and ena_lo
+      and/or ena_hi are non-null, set them appropriately. */
+  if(! RFPGABIT(TEST_MISC, LOCAL_SPE)) return 0;
+  if(ena_lo) *ena_lo = RFPGABIT(TEST_MISC, LOCAL_RX_LO) ? 1 : 0;
+  if(ena_hi) *ena_hi = RFPGABIT(TEST_MISC, LOCAL_RX_HI) ? 1 : 0;
+  return 1;
+}
+
+void hal_FPGA_TEST_enable_spe_lc(int ena_lo, int ena_hi) {
+  /** Must set ena_lo and/or ena_hi for this to do anything */
+  if(ena_lo || ena_hi) {
+    FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, LOCAL_SPE);
+    if(ena_lo) FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, LOCAL_RX_LO);
+    if(ena_hi) FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, LOCAL_RX_HI);
+  }
+}
+
+void hal_FPGA_TEST_disable_spe_lc(void) {
+  FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_SPE);
+  FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_RX_LO);
+  FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_RX_HI);
+}
