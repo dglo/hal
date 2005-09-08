@@ -204,6 +204,20 @@ void halUSleep(int us) {
    /* usleep(us); */
 }
 
+void halNanoSleep(unsigned ns) {
+   struct timespec ts, rm;
+
+   ts.tv_sec = ns/1000000000;
+   ts.tv_nsec = ns%1000000000;
+
+   while (1) {
+      if (nanosleep(&ts, &rm)<0 && errno==EINTR) {
+	 ts = rm;
+      }
+      else return;
+   }
+}
+
 UBYTE *bufferBaseAddr;
 int bufferMask;
 pthread_mutex_t *FPGAsimulMutex;
