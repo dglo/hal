@@ -201,6 +201,8 @@
 #define   DOM_FPGA_TEST_MISC_LOCAL_RX_LO        (0x00000010)
 /** enable Rx from upper DOM - must use with DOM_FPGA_TEST_MISC_LOCAL_SPE */
 #define   DOM_FPGA_TEST_MISC_LOCAL_RX_HI        (0x00000020)
+/** requires lc Rx from _both_ upper and lower DOMs */
+#define   DOM_FPGA_TEST_MISC_LOCAL_REQUIRE_UP_DOWN (0x00000040)
 /** send high pulse to lower dom */
 #define   DOM_FPGA_TEST_MISC_LOCAL_DOWN_HIGH    (0x00000100)
 /** send low pulse to lower dom */
