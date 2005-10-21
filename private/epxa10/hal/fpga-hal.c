@@ -614,7 +614,7 @@ int hal_FPGA_TEST_spe_lc_enabled(int * ena_lo, int * ena_hi) {
   return 1;
 }
 
-void hal_FPGA_TEST_enable_spe_lc(int ena_lo, int ena_hi, DOM_HAL_LOGIC_T logic_mode) {
+void hal_FPGA_TEST_enable_spe_lc(int ena_lo, int ena_hi, DOM_HAL_LC_LOGIC_T logic_mode) {
   /* LC will be disabled if ena_lo and ena_hi are both false.
      up AND down is enabled if and only if
      ena_lo, ena_hi are TRUE and logic_mode is AND.
