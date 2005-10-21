@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_fb.h
  *
- * $Revision: 1.10 $
- * $Author: jkelley $
- * $Date: 2005-05-02 20:16:58 $
+ * $Revision: 1.4.6.3 $
+ * $Author: arthur $
+ * $Date: 2005-05-16 21:41:59 $
  *
  * \b Usage:
  * \code
@@ -24,16 +24,6 @@
 #define FB_HAL_TICKS_PER_SEC       20000000
 
 /**
- * FPGA types supported
- */
-typedef enum {
-    /** Test FPGA, for STF and iceboot */
-    DOM_FPGA_TEST,
-    /** Domapp FPGA */
-    DOM_FPGA_DOMAPP
-} DOM_FPGA_TYPE;
-
-/**
  * Routine that powers the flasher board and initializes it for
  * operation.
  *
@@ -42,12 +32,11 @@ typedef enum {
  * \param config_t pointer to record CPLD configuration time in us
  * \param valid_t pointer to record clock validation time in us
  * \param reset_t pointer to record power-on reset time in us
- * \param fpga_type current FPGA running (DOM_FPGA_TYPE enumeration)
  *
  * \return 0 if success, nonzero on error
  */
 int
-hal_FB_enable(int *config_t, int *valid_t, int *reset_t, DOM_FPGA_TYPE fpga_type);
+hal_FB_enable(int *config_t, int *valid_t, int *reset_t);
 
 /**
  * Routine that powers the flasher board, but doesn't perform

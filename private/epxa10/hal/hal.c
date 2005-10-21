@@ -21,6 +21,8 @@ static void max5250Write(int chan, int val);
 static void max525Write(int chan, int val);
 static void max534Write(int chan, int val);
 
+static int max146Read(int chan);
+
 static void startI2C(void);
 static void stopI2C(void);
 static void writeI2CByte(int val);
@@ -405,12 +407,12 @@ void halDisableSerialDSR() {
 BOOLEAN halSerialDSRState() { return RPLDBIT(UART_STATUS, SERIAL_DSR); }
 
 void halBoardReboot() {
-   if (halIsFPGALoaded() && hal_FPGA_is_comm_avail()) {
-      hal_FPGA_request_reboot();
+   if (halIsFPGALoaded() && hal_FPGA_TEST_is_comm_avail()) {
+      hal_FPGA_TEST_request_reboot();
 
       /* we can't reboot unless we're granted a reboot...
        */
-      while (!hal_FPGA_is_reboot_granted()) ;
+      while (!hal_FPGA_TEST_is_reboot_granted()) ;
    }
    
    PLD(REBOOT_CONTROL) = PLDBIT(REBOOT_CONTROL, INITIATE_REBOOT);
@@ -551,15 +553,6 @@ static void waitus(int us) {
 
 void halUSleep(int us) { waitus(us); }
 
-/* good to 1GHz, Fmax of ARM core is 200MHz...
- */
-void halNanoSleep(unsigned ns) {
-   unsigned long long psperclk = 1000000000000ULL / AHB1;
-   const unsigned ticks = ns * 1000 / (unsigned) psperclk;
-   const unsigned v = *(volatile unsigned *)(REGISTERS + 0x328);
-   while ( (*(volatile unsigned *)(REGISTERS + 0x328)) - v < ticks ) ;
-}
-
 /* send a up to 32 bit value to the serial port...
  * assume chips can handle 1MHz
  */
@@ -641,6 +634,26 @@ static void max534Write(int chan, int val) {
     * a[1..0] c[1..0] data[7..0]
     */
    writeSPI( ((chan&3)<<10) | (0x3<<8) | (val&0xff), 12);
+}
+
+/* read from max146...
+ *
+ * 8 channel 12-bit ADC
+ */
+static int max146Read(int chan) {
+   const int cw = 0x80 | ((chan&7)<<4) | 0xe;
+
+   /* write control word...
+    */
+   writeSPI(cw, 8);
+
+   /* make sure conversion is done...
+    */
+   waitus(10);
+
+   /* read out results...
+    */
+   return readSPI(16, PLDBIT(SPI_READ_DATA, MISO_DATA_SC))>>4; 
 }
 
 /* i2c start condition...
@@ -939,6 +952,14 @@ static int readLTC1286(void) {
 
    /* we only use bottom 12 bits... */
    return ret&0x0fff;
+}
+
+static void ows8(int b) {
+   int i;
+   for (i=0; i<8; i++) {
+      PLD(ONE_WIRE) = ( (b>>i) & 1 ) ? 0x9 : 0xa;
+      halUSleep(100);
+   }
 }
 
 static void waitBusy(void) { while (RPLDBIT(ONE_WIRE, BUSY)) ; }

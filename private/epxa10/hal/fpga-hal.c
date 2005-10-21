@@ -186,67 +186,6 @@ void hal_FPGA_TEST_trigger_LED(int trigger_mask) {
    FPGA(TEST_SIGNAL) = clearLaunch() | reg;
 }
 
-/* map a hal component to a index in the array or -1 on error... */
-static int cmpIdx(DOM_HAL_FPGA_COMPONENTS cmp) {
-   #define DECL_FPGA_COMP(a) DOM_HAL_FPGA_COMP_##a, FPGA_VERSIONS_##a
-   const struct {
-      DOM_HAL_FPGA_COMPONENTS cmp;
-      int idx;
-   } map[] = {
-      { DECL_FPGA_COMP(COM_FIFO) },
-      { DECL_FPGA_COMP(COM_DP) },
-      { DECL_FPGA_COMP(DAQ) },
-      { DECL_FPGA_COMP(PULSERS) },
-      { DECL_FPGA_COMP(DISCRIMINATOR_RATE) },
-      { DECL_FPGA_COMP(LOCAL_COINC) },
-      { DECL_FPGA_COMP(FLASHER_BOARD) },
-      { DECL_FPGA_COMP(TRIGGER) },
-      { DECL_FPGA_COMP(LOCAL_CLOCK) },
-      { DECL_FPGA_COMP(SUPERNOVA) }
-   };
-   #undef DECL_FPGA_COMP
-   const int nmap = sizeof(map) / sizeof(map[0]);
-   int i;
-   for (i=0; i<nmap; i++) if (map[i].cmp==cmp) return map[i].idx;
-   return -1;
-}
-
-/* map a hal component to a index in the array or -1 on error... */
-static int typeIdx(DOM_HAL_FPGA_TYPES type) {
-   #define DECL_FPGA_TYPE(a) DOM_HAL_FPGA_TYPE_##a, FPGA_VERSIONS_TYPE_##a
-   const struct {
-      DOM_HAL_FPGA_COMPONENTS type;
-      int idx;
-   } map[] = {
-      { DECL_FPGA_TYPE(INVALID) },
-      { DECL_FPGA_TYPE(STF_COM) },
-      { DECL_FPGA_TYPE(DOMAPP) },
-      { DECL_FPGA_TYPE(CONFIGBOOT) },
-      { DECL_FPGA_TYPE(ICEBOOT) },
-      { DECL_FPGA_TYPE(STF_NOCOM) }
-   };
-   #undef DECL_FPGA_TYPE
-   const int nmap = sizeof(map) / sizeof(map[0]);
-   int i;
-   for (i=0; i<nmap; i++) if (map[i].type==type) return map[i].idx;
-   return -1;
-}
-
-/* return component version number... */
-int hal_FPGA_query_component_version(DOM_HAL_FPGA_COMPONENTS cmp) {
-   const unsigned *rom = (const unsigned *) DOM_FPGA_VERSIONING;
-   const int idx = cmpIdx(cmp);
-   if (idx<0) return -1;
-   return rom[idx];
-}
-
-
-/* return component version number... */
-int hal_FPGA_query_component_expected(DOM_HAL_FPGA_TYPES type,
-                                      DOM_HAL_FPGA_COMPONENTS cmp) {
-   return expected_versions[typeIdx(type)][cmpIdx(cmp)];
-}
-
 static int chkcomp(int mask, unsigned comps, 
 		   DOM_HAL_FPGA_COMPONENTS cmp,
 		   int val) {
@@ -269,7 +208,7 @@ hal_FPGA_query_versions(DOM_HAL_FPGA_TYPES type, unsigned comps) {
    int mask = 0;
 
    /** Config boot fpga */
-   if (type==DOM_HAL_FPGA_TYPE_CONFIGBOOT) {
+   if (type==DOM_HAL_FPGA_TYPE_CONFIG) {
       if (rom[0]!=FPGA_VERSIONS_TYPE_CONFIGBOOT) return -1;
    }
    else if (type==DOM_HAL_FPGA_TYPE_ICEBOOT) {
@@ -339,7 +278,7 @@ DOM_HAL_FPGA_TYPES hal_FPGA_query_type(void) {
       return DOM_HAL_FPGA_TYPE_DOMAPP;
    }
    else if (rom[0]==FPGA_VERSIONS_TYPE_CONFIGBOOT) {
-      return DOM_HAL_FPGA_TYPE_CONFIGBOOT;
+      return DOM_HAL_FPGA_TYPE_CONFIG;
    }
    else if (rom[0]==FPGA_VERSIONS_TYPE_ICEBOOT) {
       return DOM_HAL_FPGA_TYPE_ICEBOOT;
@@ -491,8 +430,7 @@ void hal_FPGA_TEST_disable_LED(void) {
 
 void hal_FPGA_TEST_set_atwd_LED_delay(int delay) {
     /* Only low 4 bits used */
-    FPGA(TEST_LED_ATWD_DELAY) = 
-       (FPGA(TEST_LED_ATWD_DELAY)&0xf) | (delay & 0xf);
+    FPGA(TEST_LED_ATWD_DELAY) = (delay & 0xf);
 }
 
 void hal_FPGA_TEST_start_FB_flashing(void) {
@@ -635,8 +573,8 @@ int hal_FPGA_TEST_atwd1_has_lc(void) {
 
 
 #define WINDOW_BITS  6
-#define TICKTIME_NS  ((1000000000 / FPGA_HAL_TICKS_PER_SEC)*2)
-
+#warning fixme TICKTIME_NS defined better somewhere else?
+#define TICKTIME_NS  50
 /** JJ: Thorsten informs me that 0x3F is disallowed, hence -2: */
 #define MAXWINDOW    ((1<<WINDOW_BITS)-2) 
 /** (1<<6 - 2) * 50 = 3100: */
@@ -676,12 +614,33 @@ int hal_FPGA_TEST_spe_lc_enabled(int * ena_lo, int * ena_hi) {
   return 1;
 }
 
-void hal_FPGA_TEST_enable_spe_lc(int ena_lo, int ena_hi) {
-  /** Must set ena_lo and/or ena_hi for this to do anything */
+void hal_FPGA_TEST_enable_spe_lc(int ena_lo, int ena_hi, DOM_HAL_LOGIC_T logic_mode) {
+  /* LC will be disabled if ena_lo and ena_hi are both false.
+     up AND down is enabled if and only if
+     ena_lo, ena_hi are TRUE and logic_mode is AND.
+  */
   if(ena_lo || ena_hi) {
     FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, LOCAL_SPE);
-    if(ena_lo) FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, LOCAL_RX_LO);
-    if(ena_hi) FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, LOCAL_RX_HI);
+  } else {
+    FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_SPE);
+  }
+
+  if(ena_lo) {
+    FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, LOCAL_RX_LO);
+  } else {
+    FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_RX_LO);
+  }
+
+  if(ena_hi) {
+    FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, LOCAL_RX_HI);
+  } else {
+    FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_RX_HI);
+  }
+
+  if(ena_lo && ena_hi && logic_mode == DOM_HAL_LC_LOGIC_AND) {
+    FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, LOCAL_REQUIRE_UP_DOWN);
+  } else {
+    FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_REQUIRE_UP_DOWN);
   }
 }
 
@@ -689,4 +648,5 @@ void hal_FPGA_TEST_disable_spe_lc(void) {
   FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_SPE);
   FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_RX_LO);
   FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_RX_HI);
+  FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_REQUIRE_UP_DOWN);
 }
