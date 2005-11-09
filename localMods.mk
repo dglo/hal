@@ -13,3 +13,5 @@ BUILT_HDRS := $(patsubst %.awk, $(BUILD_DIR)/%.$(C_INC_SUFFIX), $(AWK_TARGETS))
 BUILT_FILES := $(BUILT_HDRS)
 
 vpath %.awk $(PUB_DIR_NAME)/$(PLATFORM) $(PUB_DIR_NAME) $(PVT_DIR_NAME)/$(PLATFORM) $(PVT_DIR_NAME)
+
+LOAD_LIBS := $(filter-out -ldom-fpga, $(LOAD_LIBS))

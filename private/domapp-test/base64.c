@@ -18,16 +18,14 @@ static char encode6Bits(unsigned char bits) {
 /* length of output vector in base64...
  */
 int base64EncodeLength(const int n) {
-  return 
-    4*((n+3)/3) + /* every 3 input bytes takes 4 output chars...      */
-    (n+74)/75 +   /* every line is 75 characters long, we need 1 '\n' */
-    1             /* finally, the terminating newline...              */;
+   const int nn = 4 * ((n+3)/3);
+   return nn + (nn+74)/75 + 1;
 }
 
 static int flushOne(char *output, char v, int n) {
    int ret = 1;
 
-   if ( (n+1)%75 == 0 ) {
+   if ( (n+1)%76 == 0 ) {
      *output = '\n'; output++;
      ret = 2;
    }
@@ -83,14 +81,14 @@ void base64EncodeBuffer(char *output, const unsigned char *input, int n) {
       }
    }
 
-   if (nw>0 && output[-1]!='\n') {
-      *output = '\n'; nw++; output++;
+   if (nw>0) {
+     *output = '\n'; output++; nw++;
    }
-
    *output = '\n'; output++; nw++;
 }
 
-/* returns 0xff if invalid character decoded (empty char)...
+/* returns: 0xfe if we received an '=' character, 
+ *          0xff if invalid character decoded (empty char)...
  */
 static unsigned char decode6Bits(char c) {
    if (c >= 'A' && c <= 'Z') return(c - 'A');
@@ -98,7 +96,8 @@ static unsigned char decode6Bits(char c) {
    if (c >= '0' && c <= '9') return(c - '0' + 52);
    if (c == '+')             return 62;
    if (c == '/')             return 63;
-   return 0xff;  
+   if (c == '=')             return 0xfe;
+   return 0xff;
 }
 
 int base64DecodeBuffer(unsigned char *output,
@@ -108,7 +107,11 @@ int base64DecodeBuffer(unsigned char *output,
    int ret = 0;
    for (i=0; i<n; i++, input++) {
       const unsigned char v = decode6Bits(*input);
-      if (v!=0xff) {
+
+      if (v==0xfe) {
+         shift = 0;
+      }
+      else if (v!=0xff) {
 	 if (shift==0) {
 	   sr = v<<2;
          }

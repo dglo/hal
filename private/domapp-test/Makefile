@@ -1,17 +1,46 @@
-all: ../$(PLATFORM)/bin/real-app.bin.gz
+.SUFFIXES: .c .o .S .elf .bin
 
-../epxa10/bin/real-app.bin.gz: real-app.elf
+KOBJS = ../lib/crt0.o ../lib/libkernel.a
 
-../Linux-i386/bin/real-app: real-app.o
+all: ../bin/domapp-test.bin.gz
+
+.c.o:
+	$(CC) -c $(CFLAGS) $<
+
+.S.o:
+	$(CPP) $(CPPFLAGS) -o $*.i $<
+	$(AS) $(AFLAGS) -o $*.o $*.i
+
+.elf.bin:
+	$(OBJCOPY) -O binary $*.elf $*.bin
+	$(CPP) $(CPPFLAGS) -DBINFILE=\"$*.bin\" -o $*-raw.i $(RAWS)
+	$(AS) $(AFLAGS) -o $*-raw.o $*-raw.i
+	$(LD) --script=$(RAWX) -o $*-raw.elf $*-raw.o
+	$(OBJCOPY) -O binary $*-raw.elf $*.bin
+
+../bin/%.bin.gz: %.bin; gzip -c $< > $@
+
+../bin/domapp-test.bin.gz: domapp-test.bin
+
+../bin/domapp-test: real-app.o base64.o
 	gcc -Wall -I../Linux-i386/public -L../Linux-i386/lib \
 		-DICESOFT_BUILD=\"$(ICESOFT_BUILD)\" \
-		-o real-app real-app.c -lhal
+		-o domapp-test real-app.o base64.o -lhal
+
+../bin/decode64: decode64.o base64.o
+	gcc -Wall -I../Linux-i386/public -L../Linux-i386/lib \
+		-o ../bin/decode64 decode64.o base64.o
+
+../bin/encode64: encode64.o base64.o
+	gcc -Wall -I../Linux-i386/public -L../Linux-i386/lib \
+		-o ../bin/encode64 encode64.o base64.o
 
 clean:
-	rm -f real-app *.o
+	rm -f real-app domapp-test *.o *.elf domapp-test-raw* domapp-test.bin
 
-real-app.elf: real-app.o $(KERNELX) $(LIBHAL)
-	$(LD) --script=$(KERNELX) -o stfserv.elf \
-		$(KOBJS) stfserv.o $(STFOBJS) $(EXOBJS) \
-			$(LIBHAL) $(LIBEXPAT) $(SYSLIBS)
+domapp-test.elf: real-app.o base64.o $(KERNELX) $(LIBHAL) $(SYSLIBS) $(KOBJS)
+	$(LD) --script=$(KERNELX) -o domapp-test.elf \
+		$(KOBJS) real-app.o base64.o \
+			$(LIBHAL) $(SYSLIBS)
+
 

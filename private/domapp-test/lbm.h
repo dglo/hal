@@ -1,14 +1,16 @@
 #include "hal/DOM_MB_domapp.h"
 
-/* access lookback event at 32bit word index idx */
+/* access lookback event at byte index idx */
 static inline unsigned *lbmEvent(unsigned idx) {
-   return 
-      hal_FPGA_DOMAPP_lbm_address() + (idx & HAL_FPGA_DOMAPP_LBM_ACCESS_MASK);
+   return
+      (unsigned *) 
+      ( (char *) hal_FPGA_DOMAPP_lbm_address() + 
+      (idx & HAL_FPGA_DOMAPP_LBM_ACCESS_MASK));
 }
 
 /* increment lbm pointer... */
 static inline unsigned lbmNextEvent(unsigned idx) {
-   return (idx + HAL_FPGA_DOMAPP_LBM_EVENT_LEN)&HAL_FPGA_DOMAPP_LBM_MASK;
+   return idx + HAL_FPGA_DOMAPP_LBM_EVENT_SIZE;
 }
 
 /* compute raw event length... */

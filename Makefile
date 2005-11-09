@@ -1,4 +1,5 @@
 PROJECT := hal
 PLATFORM := Linux-i386
-C_BIN_NAMES :=
--include standard.mk
+ICESOFT_HOST := Linux-i386
+
+-include project.mk

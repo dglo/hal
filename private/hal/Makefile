@@ -1,14 +1,16 @@
-OBJS = emu.o
-CC = gcc
-CFLAGS = -Wall -I../include
+#
+# libhal makefile, used in conjuction with the workspace
+# makefile
+#
+OBJS = hal.o
 
 .c.o:
 	$(CC) -c $(CFLAGS) $<
 
-all: ../lib/libdomhal.a
+all: $(LIBHAL)
 
 clean:
-	rm -f ../lib/libdomhal.a $(OBJS)
+	rm -f $(OBJS)
 
-../lib/libdomhal.a: $(OBJS)
-	$(AR) r ../lib/libdomhal.a $(OBJS)
+$(LIBHAL): $(OBJS)
+	$(AR) r $(LIBHAL) $(OBJS)
