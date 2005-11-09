@@ -1,3 +1,2 @@
-html
 # Ignore Subversion directory during Git transition
 .svn

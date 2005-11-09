@@ -51,62 +51,53 @@ static unsigned cmQueue[4096];
 static int cmPending; /* is there an interrupt pending? */
 
 static void irqHandler(void) {
-  FPGA(PONG) = intRequestStatus()&0x7;
-  unsigned junk;
-  
+   FPGA(PONG) = intRequestStatus()&0x7;
+   
    while (intRequestStatus() & (IRQ_CAL_FLASH|IRQ_RATE_METER|IRQ_SN_UPDATE)) {
-     if (intRequestStatus() & IRQ_CAL_FLASH) {
-       if (cmHead!=cmTail) {
-	 const unsigned idx = cmTail % lengthof(cmQueue);
-	 FPGA(CAL_TIME) = cmQueue[idx];
-	 cmTail++;
-       }
-       else {
-	 /* interrupt when empty means that we won't be able
-	  * to help in the future...
-	  */
-	 cmPending = 0;
-       }
-       
-       FPGA(INT_ACK) = FPGABIT(INT_ACK, CAL);
-       junk = FPGA(INT_ACK); /* Make sure write actually completes */
-     }
-     else if (intRequestStatus() & IRQ_RATE_METER) {
-       /* read rate meter... */
-       speQueue[speHead % lengthof(speQueue)] = FPGA(RATE_SPE);
-       mpeQueue[mpeHead % lengthof(mpeQueue)] = FPGA(RATE_MPE);
-       speHead++; mpeHead++;
-       FPGA(INT_ACK) = FPGABIT(INT_ACK, RATE);
-       junk = FPGA(INT_ACK); /* Make sure write actually completes */
-     }
-     else if (intRequestStatus() & IRQ_SN_UPDATE) {
-       int i;
-       const unsigned long long h1 = FPGA(SYSTIME_MSB);
-       const unsigned sn = FPGA(SN_DATA);
-       const unsigned long long l1 = (sn & 0xffff0000) | 1;
-       const unsigned long long h2 = FPGA(SYSTIME_MSB);
-       unsigned long long ticks;
-       
-       if (h1==h2) ticks = (h1<<32)|l1;
-       else {
-	 if (l1<0x80000000ULL) ticks = (h2<<32)|l1;
-	 else                  ticks = (h1<<32)|l1;
-       }
-       
-       /* get sn data */
-       for (i=0; i<4; i++) {
-	 const int idx = snHead % lengthof(snEvents);
-	 snEvents[idx].counts = (sn>>(4*i))&0xf;
-	 snEvents[idx].ticks = ticks - 65536 * (3-i);
-	 snHead++;
-       }
-       /* ack the interrupt... make sure it clears in cpu */
-       FPGA(INT_ACK) = FPGABIT(INT_ACK, SN);
-       junk = FPGA(INT_ACK); /* Make sure write actually completes */
-     }
-     else {
-       /* yikes!!! */
-     }
+      if (intRequestStatus() & IRQ_CAL_FLASH) {
+         if (cmHead!=cmTail) {
+            const unsigned idx = cmTail % lengthof(cmQueue);
+            FPGA(CAL_TIME) = cmQueue[idx];
+            cmTail++;
+         }
+         else {
+            /* interrupt when empty means that we won't be able
+             * to help in the future...
+             */
+            cmPending = 0;
+         }
+         
+         FPGA(INT_ACK) = FPGABIT(INT_ACK, CAL);
+      }
+      else if (intRequestStatus() & IRQ_RATE_METER) {
+         /* read rate meter... */
+         speQueue[speHead % lengthof(speQueue)] = FPGA(RATE_SPE);
+         mpeQueue[mpeHead % lengthof(mpeQueue)] = FPGA(RATE_MPE);
+         speHead++; mpeHead++;
+         FPGA(INT_ACK) = FPGABIT(INT_ACK, RATE);
+      }
+      else if (intRequestStatus() & IRQ_SN_UPDATE) {
+         /* FIXME: deal with 32 bit rollover... */
+         int i;
+         unsigned sn = FPGA(SN_DATA);
+         unsigned long long ticks = 
+            ((unsigned long long) FPGA(SYSTIME_MSB) << 32) | 
+            (sn&0xffff0000) | 1;
+         
+         /* get sn data */
+         for (i=0; i<4; i++) {
+            const int idx = snHead % lengthof(snEvents);
+            snEvents[idx].counts = (sn>>(4*i))&0xf;
+            snEvents[idx].ticks = ticks + 65536 * i;
+            snHead++;
+         }
+         
+         /* ack the interrupt... */
+         FPGA(INT_ACK) = FPGABIT(INT_ACK, SN);
+      }
+      else {
+         /* yikes!!! */
+      }
    }
 }
 
@@ -146,7 +137,6 @@ static void enableIRQ(enum IrqNumbers irq) {
    FPGA(INT_EN) |= irq;
    * (unsigned volatile *) INT_MASK_SET |= irq;
 }
-
 
 unsigned long long hal_FPGA_DOMAPP_get_local_clock(void) {
    unsigned long long h1 = FPGA(SYSTIME_MSB);
@@ -194,23 +184,6 @@ void hal_FPGA_DOMAPP_compression_mode(HAL_FPGA_DOMAPP_COMPRESSION_MODES mode) {
    FPGA(DAQ) = ( FPGA(DAQ) & ~FPGABIT(DAQ, COMP_MODE) ) | mode;
 }
 
-void hal_FPGA_DOMAPP_enable_icetop_chargestamp(void) {
-   FPGA(DAQ) |= FPGABIT(DAQ, ICETOP);
-}
-
-void hal_FPGA_DOMAPP_disable_icetop_chargestamp(void) {
-   FPGA(DAQ) &= ~FPGABIT(DAQ, ICETOP);
-}
-
-void hal_FPGA_DOMAPP_enable_minbias(void) {
-  FPGA(DAQ) |= FPGABIT(DAQ, MINBIAS);
-}
-
-void hal_FPGA_DOMAPP_disable_minbias(void) {
-  FPGA(DAQ) &= ~FPGABIT(DAQ, MINBIAS);
-}
-
-
 void hal_FPGA_DOMAPP_lbm_reset(void) {
    FPGA(LBM_CONTROL) |= FPGABIT(LBM_CONTROL, RESET);
 }
@@ -231,7 +204,7 @@ void hal_FPGA_DOMAPP_lc_enable(int mask) {
 void hal_FPGA_DOMAPP_lc_span(int doms) {
    FPGA(LC_CONTROL) = 
       ( FPGA(LC_CONTROL) & ~FPGABIT(LC_CONTROL, LC_LENGTH) ) | 
-      (((doms-1)&3)<<4);
+      (((doms&3)-1)<<4);
 }
 
 /**
@@ -275,15 +248,15 @@ void hal_FPGA_DOMAPP_lc_disc_mpe(void) {
 }
 
 int hal_FPGA_DOMAPP_lc_windows(int pre, int post) {
-   const int preticks = ( (pre - 25) / 25);
-   const int postticks = ( (post - 25) / 25);
+   if (pre<100 || pre>6200 || post<100 || post>6200) return -1;
    
-   if (preticks<0 || preticks>0x3f || postticks<0 || postticks>0x3f) return -1;
-   
+   pre=(pre-100)/100;
+   post=(post-100)/100;
+
    FPGA(LC_CONTROL) = 
       (FPGA(LC_CONTROL) & 
        ~(FPGABIT(LC_CONTROL, PRE_WINDOW)|FPGABIT(LC_CONTROL, POST_WINDOW)))| 
-      (preticks<<16)|(postticks<<24);
+      (pre<<16)|(post<<24);
 
    return 0;
 }
@@ -402,15 +375,15 @@ void hal_FPGA_DOMAPP_rate_monitor_enable(int mask) {
       enableIRQ(IRQ_RATE_METER);
    }
    FPGA(RATE_CONTROL) = 
-     ( FPGA(RATE_CONTROL) & ~FPGABIT(RATE_CONTROL, ENABLE) ) | (mask&0x303);
+      ( FPGA(RATE_CONTROL) & FPGABIT(RATE_CONTROL, ENABLE) ) | (mask&3);
 }
 
 int hal_FPGA_DOMAPP_rate_monitor_deadtime(int time) {
    if (time<100 || time>102400) return -1;
    
    FPGA(RATE_CONTROL) = 
-      ( FPGA(RATE_CONTROL) & ~FPGABIT(RATE_CONTROL, DEADTIME) ) | 
-      (((time-100)/100)<<16);
+      ( FPGA(RATE_CONTROL) & FPGABIT(RATE_CONTROL, ENABLE) ) | 
+      ((time-100)/100);
 
    return 0;
 }
@@ -462,7 +435,6 @@ int hal_FPGA_DOMAPP_mpe_rate(unsigned *mpe) {
 
 unsigned hal_FPGA_DOMAPP_spe_rate_immediate(void) { return FPGA(RATE_SPE); }
 unsigned hal_FPGA_DOMAPP_mpe_rate_immediate(void) { return FPGA(RATE_MPE); }
-unsigned hal_FPGA_DOMAPP_deadtime_immediate(void) { return FPGA(DEADTIME); }
 
 void hal_FPGA_DOMAPP_sn_mode(HAL_FPGA_DOMAPP_SN_MODES mode) {
    if (mode==HAL_FPGA_DOMAPP_SN_MODE_OFF) {
@@ -480,7 +452,7 @@ void hal_FPGA_DOMAPP_sn_mode(HAL_FPGA_DOMAPP_SN_MODES mode) {
 }
 
 int hal_FPGA_DOMAPP_sn_dead_time(int time) {
-   if (time<6400 || time>819200) return -1;
+   if (time<6400 || time>512000) return -1;
    
    FPGA(SN_CONTROL) = 
       ( FPGA(SN_CONTROL) & ~FPGABIT(SN_CONTROL, DEAD_TIME) ) | 
@@ -498,12 +470,10 @@ int hal_FPGA_DOMAPP_sn_event(SNEvent *evt) {
 
    /* retrieve it... */
    while (1) {
-      const unsigned short nentries = snHead - snTail;
-      
       *evt = snEvents[snTail % lengthof(snEvents)];
       
       /* make sure we're still safe from overrun... */
-      if (nentries > lengthof(snEvents) - 4) {
+      if (snHead - snTail > lengthof(snEvents) - 4) {
          snTail = snHead - lengthof(snEvents) + 16;
          ret = 1;
       }
@@ -529,38 +499,53 @@ void hal_FPGA_DOMAPP_R2R_ladder(const unsigned char *pattern) {
    for (i=0; i<256; i++) addr[i] = pattern[i];
 }
 
-void hal_FPGA_DOMAPP_set_delta_compression_all_avail() {
-  FPGA(COMP_CONTROL) &= ~FPGABIT(COMP_CONTROL, READOUT_LOWGAIN);
-  FPGA(COMP_CONTROL) |= FPGABIT(COMP_CONTROL,  READOUT_BEACON);
+void hal_FPGA_DOMAPP_RG_set_zero_threshold(void) {
+   unsigned *addr = (unsigned *) DOM_FPGA_COMP_CONTROL;
+   *addr |= FPGABIT(COMP_CONTROL, SET_0_THRESH);
 }
 
-void hal_FPGA_DOMAPP_set_delta_compression_lowgain_only() {
-  FPGA(COMP_CONTROL) |= FPGABIT(COMP_CONTROL, READOUT_LOWGAIN);
-  FPGA(COMP_CONTROL) &= ~FPGABIT(COMP_CONTROL, READOUT_BEACON);
+void hal_FPGA_DOMAPP_RG_clear_zero_threshold(void) {
+   unsigned *addr = (unsigned *) DOM_FPGA_COMP_CONTROL;
+   *addr &= ~FPGABIT(COMP_CONTROL, SET_0_THRESH);
 }
 
-void hal_FPGA_DOMAPP_set_delta_compression_lowgain_allbeacon() {
-  FPGA(COMP_CONTROL) |= FPGABIT(COMP_CONTROL, READOUT_LOWGAIN);
-  FPGA(COMP_CONTROL) |= FPGABIT(COMP_CONTROL, READOUT_BEACON);
+void hal_FPGA_DOMAPP_RG_compress_last_only(void) {
+   unsigned *addr = (unsigned *) DOM_FPGA_COMP_CONTROL;
+   *addr |= FPGABIT(COMP_CONTROL, ONLY_LAST);
 }
 
-void hal_FPGA_DOMAPP_set_icetop_chargestamp_mode(HAL_FPGA_DOMAPP_ICETOP_MODES mode, int chan) {
-  /* Chan must be <= FPGABIT(ICETOP_CONTROL, CHANNEL) */
-  if(mode == HAL_FPGA_DOMAPP_ICETOP_MODE_AUTO) {
-    FPGA(ICETOP_CONTROL) = 
-      (FPGA(ICETOP_CONTROL) 
-       & ~FPGABIT(ICETOP_CONTROL, CHANNEL))
-      | FPGABIT(ICETOP_CONTROL, CHSEL)
-      | (chan & FPGABIT(ICETOP_CONTROL, CHANNEL));
-  } else if(mode == HAL_FPGA_DOMAPP_ICETOP_MODE_CHAN) {
-    FPGA(ICETOP_CONTROL) = 
-      (FPGA(ICETOP_CONTROL) 
-       & ~FPGABIT(ICETOP_CONTROL, CHANNEL)
-       & ~FPGABIT(ICETOP_CONTROL, CHSEL))
-      | (chan & FPGABIT(ICETOP_CONTROL, CHANNEL));
-  } else {
-    /* Ignore */
-  }
+void hal_FPGA_DOMAPP_RG_compress_all(void) {
+   unsigned *addr = (unsigned *) DOM_FPGA_COMP_CONTROL;
+   *addr &= ~FPGABIT(COMP_CONTROL, ONLY_LAST);
+}
+
+void hal_FPGA_DOMAPP_RG_fadc_threshold(short thresh) {
+   unsigned *addr = (unsigned *) DOM_FPGA_FADC_THRESHOLD;
+   *addr = thresh&0x3ff;
+}
+
+void hal_FPGA_DOMAPP_RG_atwd_threshold(short chip, short ch, short thresh) {
+   unsigned *addr = (unsigned *) DOM_FPGA_FADC_THRESHOLD;
+   unsigned mask, val;
+   
+   chip &= 1;
+   addr += chip*2;
+   
+   ch &= 3;
+   addr += (ch/2);
+
+   if ( (ch%2) == 0 ) {
+      /* low bits... */
+      mask = ~0x3ff;
+      val = thresh;
+   }
+   else {
+      /* high bits... */
+      mask = ~(0x3ff<<16);
+      val = thresh<<16;
+   }
+
+   *addr = (*addr & mask) | val;
 }
 
 #if 0

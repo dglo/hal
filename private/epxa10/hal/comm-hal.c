@@ -1204,15 +1204,3 @@ int  hal_FPGA_is_reboot_granted(void) {
 int hal_FPGA_is_comm_avail(void) {
    return RFPGABIT(COMM_STATUS, AVAIL)!=0;
 }
-
-void hal_FPGA_set_comm_params(int thresh, int dacmax,
-                              int rdelay, int sdelay,
-                              int minclev, int maxclev) {
-   FPGA(COMM_CLEV) = (minclev & 0x3ff)| ( (maxclev & 0x3ff) << 16 );
-   FPGA(COMM_THR_DEL) = 
-      (thresh & 0xff) |
-      ((dacmax & 0x3)<<8) |
-      ((rdelay & 0xff)<<16) |
-      ((sdelay & 0xff)<<24);
-}
-

@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_domapp.h
  *
- * $Revision: 1.1.1.20 $
- * $Author: jacobsen $
- * $Date: 2008-06-18 01:56:13 $
+ * $Revision: 1.1.1.1 $
+ * $Author: arthur $
+ * $Date: 2005-11-09 23:22:25 $
  *
  * \b Usage:
  * \code
@@ -144,8 +144,8 @@ typedef enum {
    HAL_FPGA_DOMAPP_ATWD_MODE_TESTING   = (1<<12),
    /** for debugging */
    HAL_FPGA_DOMAPP_ATWD_MODE_DEBUGGING = (2<<12),
-   /** beacon mode - all for beacons, normal for SPEs */
-   HAL_FPGA_DOMAPP_ATWD_MODE_BEACON    = (3<<12),
+   /** undecided */
+   HAL_FPGA_DOMAPP_ATWD_MODE_TBD       = (3<<12),
 } HAL_FPGA_DOMAPP_ATWD_MODES;
 
 /**
@@ -227,13 +227,6 @@ typedef enum {
 void
 hal_FPGA_DOMAPP_compression_mode(HAL_FPGA_DOMAPP_COMPRESSION_MODES mode);
 
-/** Compress and store all available ATWD channels */
-void hal_FPGA_DOMAPP_set_delta_compression_all_avail();
-/** Compress and store all available only lowest gain ATWD channel */
-void hal_FPGA_DOMAPP_set_delta_compression_lowgain_only();
-/** Compress and store all available ATWD channels for beacons, lowest gain for SPEs */
-void hal_FPGA_DOMAPP_set_delta_compression_lowgain_allbeacon();
-
 /**
  * lookback memory pointer access mask -- we only use
  * the lower 24 bits (16M bytes) to access memory...
@@ -281,17 +274,14 @@ hal_FPGA_DOMAPP_lbm_pointer(void);
  * \see hal_FPGA_DOMAPP_lc_enable
  */
 typedef enum {
-  /** enable sending up */
-  HAL_FPGA_DOMAPP_LC_ENABLE_SEND_UP   = (1<<0),
-  /** enable sending down */
-  HAL_FPGA_DOMAPP_LC_ENABLE_SEND_DOWN = (1<<1),
-  /** enable rcv up */
-  HAL_FPGA_DOMAPP_LC_ENABLE_RCV_UP    = (1<<2),
-  /** enable rcv down */
-  HAL_FPGA_DOMAPP_LC_ENABLE_RCV_DOWN  = (1<<3),
-  /** enable rcv up && down requirement 
-      (must assert along with RCV_UP and RCV_DOWN */
-  HAL_FPGA_DOMAPP_LC_ENABLE_RECV_UP_AND_DOWN = (1<<6)
+   /** enable sending up */
+   HAL_FPGA_DOMAPP_LC_ENABLE_SEND_UP   = 1,
+   /** enable sending down */
+   HAL_FPGA_DOMAPP_LC_ENABLE_SEND_DOWN = 2,
+   /** enable rcv up */
+   HAL_FPGA_DOMAPP_LC_ENABLE_RCV_UP    = 4,
+   /** enable rcv down */
+   HAL_FPGA_DOMAPP_LC_ENABLE_RCV_DOWN  = 8
 } HAL_FPGA_DOMAPP_LC_ENABLES;
 
 /**
@@ -345,8 +335,8 @@ hal_FPGA_DOMAPP_lc_disc_mpe(void);
 /**
  * set pre and post discriminator windows...
  *
- * \param pre pre-discriminator window in ns (25ns .. 1600ns)
- * \param post post-discriminator window in ns (25ns .. 1600ns)
+ * \param pre pre-discriminator window in ns (100ns .. 6200ns)
+ * \param post post-discriminator window in ns (100ns .. 6200ns)
  * \return 0 ok, non-zero, invalid window
  */
 int
@@ -502,9 +492,7 @@ hal_FPGA_DOMAPP_FB_get_attn(void);
 typedef enum {
    HAL_FPGA_DOMAPP_RATE_MONITOR_OFF = 0,
    HAL_FPGA_DOMAPP_RATE_MONITOR_SPE = 1,
-   HAL_FPGA_DOMAPP_RATE_MONITOR_MPE = 2,
-   HAL_FPGA_DOMAPP_RATE_MONITOR_DEADTIME_ATWD_A = (1<<8),
-   HAL_FPGA_DOMAPP_RATE_MONITOR_DEADTIME_ATWD_B = (2<<8)
+   HAL_FPGA_DOMAPP_RATE_MONITOR_MPE = 2
 } HAL_FPGA_DOMAPP_RATE_MONITORS;
 
 /**
@@ -563,12 +551,6 @@ hal_FPGA_DOMAPP_spe_rate_immediate(void);
  */
 unsigned
 hal_FPGA_DOMAPP_mpe_rate_immediate(void);
-
-/** 
- * get deadtime 
- */
-unsigned
-hal_FPGA_DOMAPP_deadtime_immediate(void);
 
 /**
  * supernova modes
@@ -644,48 +626,56 @@ void
 hal_FPGA_DOMAPP_R2R_ladder(const unsigned char *pattern);
 
 /**
- * Enable IceTop-mode charge stamps
- */ 
-void
-hal_FPGA_DOMAPP_enable_icetop_chargestamp(void);
-
-/**
- * Disable IceTop-mode charge stamps
+ * roadgrader: set all thresholds to zero
  */
 void
-hal_FPGA_DOMAPP_disable_icetop_chargestamp(void);
+hal_FPGA_DOMAPP_RG_set_zero_threshold(void);
 
 /**
- * Set mode and channel for IceTop charge stamps - 
- * must be <= FPGABIT(ICETOP_CONTROL, CHANNEL) (see DOM_FPGA_domapp_regs.h)
+ * roadgrader: clear all thresholds to zero
  */
-typedef enum {
-  HAL_FPGA_DOMAPP_ICETOP_MODE_AUTO=0,
-  HAL_FPGA_DOMAPP_ICETOP_MODE_CHAN=1,
-} HAL_FPGA_DOMAPP_ICETOP_MODES;
-
 void
-hal_FPGA_DOMAPP_set_icetop_chargestamp_mode(HAL_FPGA_DOMAPP_ICETOP_MODES mode, 
-					    int chan);
+hal_FPGA_DOMAPP_RG_clear_zero_threshold(void);
+
+/**
+ * roadgrader, compress only the last ATWD channel
+ */
+void
+hal_FPGA_DOMAPP_RG_compress_last_only(void);
+
+/**
+ * roadgrader, compress all ATWD channels
+ */
+void
+hal_FPGA_DOMAPP_RG_compress_all(void);
+
+/**
+ * roadgrader, set FADC threshold
+ *
+ * \param thresh threshold (0..1023)
+ */
+void
+hal_FPGA_DOMAPP_RG_fadc_threshold(short thresh);
+
+/**
+ * roadgrader, set ATWD thresholds
+ *
+ * \param chip (0=A..1=B)
+ * \param channel (0..3)
+ * \param thresh threshold (0..1023)
+ */
+void
+hal_FPGA_DOMAPP_RG_atwd_threshold(short chip, short channel, short thresh);
+
+typedef struct HALDOMAPPRegStruct {
+   const char *name;
+   unsigned reg;
+} HALDOMAPPReg;
 
 /**
  * debugging only...
  */
-typedef struct HALDOMAPPRegStruct {
-  const char *name;
-  unsigned reg;
-} HALDOMAPPReg;
-
 int
 hal_FPGA_DOMAPP_dump_regs(HALDOMAPPReg *regs, int n);
-
-/**
- * Turn on/off icetop minbias mode
- */
-void
-hal_FPGA_DOMAPP_enable_minbias(void);
-void
-hal_FPGA_DOMAPP_disable_minbias(void);
-
 
 #endif

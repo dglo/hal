@@ -2,9 +2,9 @@
 
 KOBJS = ../lib/crt0.o ../lib/libkernel.a
 
-all: ../bin/domapp-test.bin.gz ../bin/deadtime-test.bin.gz
+all: ../bin/domapp-test.bin.gz
 
-%.o : %.c *.h
+.c.o:
 	$(CC) -c $(CFLAGS) $<
 
 .S.o:
@@ -42,9 +42,5 @@ domapp-test.elf: real-app.o base64.o $(KERNELX) $(LIBHAL) $(SYSLIBS) $(KOBJS)
 	$(LD) --script=$(KERNELX) -o domapp-test.elf \
 		$(KOBJS) real-app.o base64.o \
 			$(LIBHAL) $(SYSLIBS)
-
-deadtime-test.elf: deadtime-test.o $(KERNELX) $(LIBHAL) $(SYSLIBS) $(KOBJS)
-	$(LD) --script=$(KERNELX) -o deadtime-test.elf \
-		$(KOBJS) deadtime-test.o $(LIBHAL) $(SYSLIBS)
 
 

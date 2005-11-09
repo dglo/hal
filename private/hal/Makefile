@@ -4,7 +4,7 @@
 #
 OBJS = hal.o
 
-%.o : %.c
+.c.o:
 	$(CC) -c $(CFLAGS) $<
 
 all: $(LIBHAL)
