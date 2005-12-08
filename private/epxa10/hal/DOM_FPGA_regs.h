@@ -491,7 +491,7 @@ enum DOMPulserRates {
 /*@}*/
 
 /**
- * \defgroup fpga_test_comm_clev comm level adaption
+ * \defgroup fpga_comm_clev comm level adaption
  * \ingroup fpga_test_regs
  *
  * \brief access the communication level adaption min and max values
@@ -499,11 +499,11 @@ enum DOMPulserRates {
  * max: bits 16..25
  */
 /*@{*/
-#define DOM_FPGA_TEST_COMM_CLEV    (DOM_FPGA_TEST_BASE + 0x1080)
+#define DOM_FPGA_COMM_CLEV    (DOM_FPGA_TEST_BASE + 0x1080)
 /*@}*/
 
 /**
- * \defgroup fpga_test_comm_thr_del comm threshold and delays
+ * \defgroup fpga_comm_thr_del comm threshold and delays
  * \ingroup fpga_test_regs
  *
  * \brief access the communications thresholds and other comm parameters...
@@ -513,7 +513,7 @@ enum DOMPulserRates {
  * send_del: 31..24
  */
 /*@{*/
-#define DOM_FPGA_TEST_COMM_THR_DEL (DOM_FPGA_TEST_BASE + 0x1084)
+#define DOM_FPGA_COMM_THR_DEL (DOM_FPGA_TEST_BASE + 0x1084)
 /*@}*/
 
 /**

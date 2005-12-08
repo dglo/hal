@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_fpga.h
  *
- * $Revision: 1.1.1.1 $
+ * $Revision: 1.1.1.2 $
  * $Author: arthur $
- * $Date: 2005-11-09 23:22:25 $
+ * $Date: 2005-12-08 19:15:05 $
  *
  * \b Usage:
  * \code
@@ -207,6 +207,28 @@ hal_FPGA_receive(int *type, int *len, char *msg);
  * for backwards compatibility...
  */
 #define hal_FPGA_TEST_receive(a, b, c) hal_FPGA_receive(a, b, c)
+
+/**
+ * set communications parameters
+ *
+ * \param minclev minimum level for signal leveling
+ * \param maxclev maximum level for signal leveling
+ * \param thresh threshold for edge detection
+ * \param rdelay receiver delay
+ * \param sdelay send delay
+ */
+void
+hal_FPGA_set_comm_params(int thresh, int dacmax,
+                         int rdelay, int sdelay,
+                         int minclev, int maxclev);
+
+/**
+ * set maximum level for auto communications signal leveling
+ *
+ * \param maxclev ADC counts
+ */
+int hal_FPGA_set_maxclev(int maxclev);
+
 
 /** 
  * fpga types.
