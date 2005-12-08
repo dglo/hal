@@ -579,3 +579,9 @@ int hal_FPGA_dom_comm_version(void) {
 int hal_FPGA_dom_comm_expected_version(void) {
    return 0;
 }
+
+void hal_FPGA_set_comm_params(int thresh, int dacmax,
+                              int rdelay, int sdelay,
+                              int minclev, int maxclev) {}
+
+
