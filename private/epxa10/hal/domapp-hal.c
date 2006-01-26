@@ -204,7 +204,7 @@ void hal_FPGA_DOMAPP_lc_enable(int mask) {
 void hal_FPGA_DOMAPP_lc_span(int doms) {
    FPGA(LC_CONTROL) = 
       ( FPGA(LC_CONTROL) & ~FPGABIT(LC_CONTROL, LC_LENGTH) ) | 
-      (((doms&3)-1)<<4);
+      (((doms-1)&3)<<4);
 }
 
 /**
