@@ -585,3 +585,5 @@ void hal_FPGA_set_comm_params(int thresh, int dacmax,
                               int minclev, int maxclev) {}
 
 
+void hal_FPGA_TEST_lc_sync_ff(void) {}
+void hal_FPGA_TEST_lc_sync_comparator(void) {}

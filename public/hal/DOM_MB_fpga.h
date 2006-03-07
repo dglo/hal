@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_fpga.h
  *
- * $Revision: 1.1.1.3 $
+ * $Revision: 1.1.1.4 $
  * $Author: arthur $
- * $Date: 2006-01-26 23:51:40 $
+ * $Date: 2006-03-07 10:08:49 $
  *
  * \b Usage:
  * \code
@@ -836,6 +836,20 @@ void hal_FPGA_TEST_disable_spe_lc(void);
  * Query whether SPE->LC enable is set
  */
 int hal_FPGA_TEST_spe_lc_enabled(int * ena_lo, int * ena_hi);
+
+/**
+ * Use an FPGA FF to synchronize LC signals
+ *
+ * \see hal_FPGA_TEST_lc_sync_comparator
+ */
+void hal_FPGA_TEST_lc_sync_ff(void);
+
+/**
+ * Use comparator latches to synchronize LC signals
+ *
+ * \see hal_FPGA_TEST_lc_sync_ff
+ */
+void hal_FPGA_TEST_lc_sync_comparator(void);
 
 #endif
 

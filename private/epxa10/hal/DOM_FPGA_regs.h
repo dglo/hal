@@ -195,6 +195,8 @@
 #define   DOM_FPGA_TEST_MISC_LOCAL_UP           (0x00000001)
 /** switch on local coincidence with dom below */
 #define   DOM_FPGA_TEST_MISC_LOCAL_DOWN         (0x00000002)
+/** use fpga flip-flops to sync LC instead of comparator latch */
+#define   DOM_FPGA_TEST_MISC_LOCAL_SYNC_FF      (0x00000004)
 /** initiate upper/lower LC pulses when SPE disc. fires */
 #define   DOM_FPGA_TEST_MISC_LOCAL_SPE          (0x00000008)
 /** enable Rx from lower DOM - must use with DOM_FPGA_TEST_MISC_LOCAL_SPE */
@@ -262,39 +264,6 @@
 #define   DOM_FPGA_TEST_MISC_RESPONSE_FL_ATTN      (0x01000000)
 /** flasher board read JTAG TDO */
 #define   DOM_FPGA_TEST_MISC_RESPONSE_FL_TDO       (0x10000000)
-/*@}*/
-
-/**
- * \defgroup fpga_test_hdv_control Control HDV
- * \ingroup fpga_test_regs
- *
- * \brief Control the RS485 tranceiver
- */
-
-
-/*@{*/
-/** register addresss */
-#define DOM_FPGA_TEST_HDV_CONTROL (DOM_FPGA_TEST_BASE + 0x1018)
-/** */
-#define DOM_FPGA_TEST_HDV_CONTROL_In        (0x00000001)
-#define DOM_FPGA_TEST_HDV_CONTROL_Rx_ENABLE (0x00000002)
-#define DOM_FPGA_TEST_HDV_PULSE             (0x00000010)
-#define DOM_FPGA_TEST_HDV_AHB_MASTER_TEST   (0x00000100)
-/*@}*/
-
-/**
- * \defgroup fpga_test_hdv_status HDV Status
- * \ingroup fpga_test_regs
- *
- * \brief Status of the RS485 tranceiver
- */
-/*@{*/
-/** register addresss */
-#define DOM_FPGA_TEST_HDV_STATUS (DOM_FPGA_TEST_BASE + 0x101c)
-/** Receive data available */
-#define DOM_FPGA_TEST_HDV_STATUS_Rx (0x00000001)
-#define DOM_FPGA_TEST_HDV_AHB_MASTER_TEST_DONE (0x00000100)
-#define DOM_FPGA_TEST_HDV_AHB_MASTER_TEST_BUS_ERROR (0x00000200)
 /*@}*/
 
 /**
