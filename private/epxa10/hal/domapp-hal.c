@@ -77,18 +77,24 @@ static void irqHandler(void) {
          FPGA(INT_ACK) = FPGABIT(INT_ACK, RATE);
       }
       else if (intRequestStatus() & IRQ_SN_UPDATE) {
-         /* FIXME: deal with 32 bit rollover... */
          int i;
-         unsigned sn = FPGA(SN_DATA);
-         unsigned long long ticks = 
-            ((unsigned long long) FPGA(SYSTIME_MSB) << 32) | 
-            (sn&0xffff0000) | 1;
+         const unsigned long long h1 = FPGA(SYSTIME_MSB);
+         const unsigned sn = FPGA(SN_DATA);
+         const unsigned long long l1 = (sn & 0xffff0000) | 1;
+         const unsigned long long h2 = FPGA(SYSTIME_MSB);
+         unsigned long long ticks;
+
+         if (h1==h2) ticks = (h1<<32)|l1;
+         else {
+            if (l1<0x80000000ULL) ticks = (h2<<32)|l1;
+            else                  ticks = (h1<<32)|l1;
+         }
          
          /* get sn data */
          for (i=0; i<4; i++) {
             const int idx = snHead % lengthof(snEvents);
             snEvents[idx].counts = (sn>>(4*i))&0xf;
-            snEvents[idx].ticks = ticks + 65536 * i;
+            snEvents[idx].ticks = ticks - 65536 * (3-i);
             snHead++;
          }
          
@@ -248,15 +254,15 @@ void hal_FPGA_DOMAPP_lc_disc_mpe(void) {
 }
 
 int hal_FPGA_DOMAPP_lc_windows(int pre, int post) {
-   if (pre<100 || pre>6200 || post<100 || post>6200) return -1;
+   const int preticks = ( (pre - 25) / 25);
+   const int postticks = ( (post - 25) / 25);
    
-   pre=(pre-100)/100;
-   post=(post-100)/100;
-
+   if (preticks<0 || preticks>0x3f || postticks<0 || postticks>0x3f) return -1;
+   
    FPGA(LC_CONTROL) = 
       (FPGA(LC_CONTROL) & 
        ~(FPGABIT(LC_CONTROL, PRE_WINDOW)|FPGABIT(LC_CONTROL, POST_WINDOW)))| 
-      (pre<<16)|(post<<24);
+      (preticks<<16)|(postticks<<24);
 
    return 0;
 }

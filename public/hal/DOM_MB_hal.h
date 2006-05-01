@@ -66,9 +66,9 @@
 /**
  * \file DOM_MB_hal.h
  *
- * $Revision: 1.1.1.9 $
+ * $Revision: 1.1.1.10 $
  * $Author: arthur $
- * $Date: 2006-04-19 20:30:33 $
+ * $Date: 2006-05-01 23:10:55 $
  *
  * \b Usage:
  * \code

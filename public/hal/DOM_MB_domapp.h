@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_domapp.h
  *
- * $Revision: 1.1.1.8 $
+ * $Revision: 1.1.1.9 $
  * $Author: arthur $
- * $Date: 2006-04-19 20:30:32 $
+ * $Date: 2006-05-01 23:10:55 $
  *
  * \b Usage:
  * \code
@@ -335,8 +335,8 @@ hal_FPGA_DOMAPP_lc_disc_mpe(void);
 /**
  * set pre and post discriminator windows...
  *
- * \param pre pre-discriminator window in ns (100ns .. 6200ns)
- * \param post post-discriminator window in ns (100ns .. 6200ns)
+ * \param pre pre-discriminator window in ns (25ns .. 1600ns)
+ * \param post post-discriminator window in ns (25ns .. 1600ns)
  * \return 0 ok, non-zero, invalid window
  */
 int
