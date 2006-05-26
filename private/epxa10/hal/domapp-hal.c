@@ -388,8 +388,8 @@ int hal_FPGA_DOMAPP_rate_monitor_deadtime(int time) {
    if (time<100 || time>102400) return -1;
    
    FPGA(RATE_CONTROL) = 
-      ( FPGA(RATE_CONTROL) & FPGABIT(RATE_CONTROL, ENABLE) ) | 
-      ((time-100)/100);
+      ( FPGA(RATE_CONTROL) & FPGABIT(RATE_CONTROL, DEADTIME) ) | 
+      (((time-100)/100)<<16);
 
    return 0;
 }
