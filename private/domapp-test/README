@@ -42,9 +42,11 @@ none
   cal_atwd_offset=[int]
   cal_pulser_rate=[double]
   sn_mode=off|spe|mpe
-  sn_gate_time=[int (us)]
   sn_dead_time=[int (ns)]
+  rate_dead_time=[int (ns)]
   rate_enable=spe,mpe,none
+  hv=on|off
+  base_dac=[int (counts)]
 
 ECHO\n: go into echo mode (no return)
 VERS\n: request version information

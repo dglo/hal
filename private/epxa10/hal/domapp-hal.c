@@ -476,10 +476,12 @@ int hal_FPGA_DOMAPP_sn_event(SNEvent *evt) {
 
    /* retrieve it... */
    while (1) {
+      const unsigned short nentries = snHead - snTail;
+      
       *evt = snEvents[snTail % lengthof(snEvents)];
       
       /* make sure we're still safe from overrun... */
-      if (snHead - snTail > lengthof(snEvents) - 4) {
+      if (nentries > lengthof(snEvents) - 4) {
          snTail = snHead - lengthof(snEvents) + 16;
          ret = 1;
       }

@@ -1,4 +1,7 @@
 /* deadtime-test.c, test scaler deadtime on domapp fpga...
+ *
+ * FIXME: this test is now obselete, functionality is now
+ * covered by the rate-dead-time.sh test...
  */
 #include <stdio.h>
 #include <string.h>
