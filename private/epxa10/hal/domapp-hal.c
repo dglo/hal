@@ -458,7 +458,7 @@ void hal_FPGA_DOMAPP_sn_mode(HAL_FPGA_DOMAPP_SN_MODES mode) {
 }
 
 int hal_FPGA_DOMAPP_sn_dead_time(int time) {
-   if (time<6400 || time>512000) return -1;
+   if (time<6400 || time>819200) return -1;
    
    FPGA(SN_CONTROL) = 
       ( FPGA(SN_CONTROL) & ~FPGABIT(SN_CONTROL, DEAD_TIME) ) | 

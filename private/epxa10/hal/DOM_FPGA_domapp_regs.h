@@ -133,7 +133,7 @@
  */
 #define DOM_FPGA_SN_CONTROL (DOM_FPGA_BASE + 0x4a0)
 #define DOM_FPGA_SN_CONTROL_ENABLE     3
-#define DOM_FPGA_SN_CONTROL_DEAD_TIME (0x7<<16)
+#define DOM_FPGA_SN_CONTROL_DEAD_TIME (0x7f<<16)
 
 /**
  * Supernova meter control
