@@ -50,60 +50,69 @@ static unsigned cmHead, cmTail;
 static unsigned cmQueue[4096];
 static int cmPending; /* is there an interrupt pending? */
 
+static inline void waitIRQclear(unsigned statusBits, int maxWait) {
+  int i;
+  for(i=0;i<maxWait;i++)
+    if(! (intRequestStatus() & statusBits)) return;
+  /* Give up if it takes this long */
+}
+
 static void irqHandler(void) {
    FPGA(PONG) = intRequestStatus()&0x7;
-   
-   while (intRequestStatus() & (IRQ_CAL_FLASH|IRQ_RATE_METER|IRQ_SN_UPDATE)) {
-      if (intRequestStatus() & IRQ_CAL_FLASH) {
-         if (cmHead!=cmTail) {
-            const unsigned idx = cmTail % lengthof(cmQueue);
-            FPGA(CAL_TIME) = cmQueue[idx];
-            cmTail++;
-         }
-         else {
-            /* interrupt when empty means that we won't be able
-             * to help in the future...
-             */
-            cmPending = 0;
-         }
-         
-         FPGA(INT_ACK) = FPGABIT(INT_ACK, CAL);
-      }
-      else if (intRequestStatus() & IRQ_RATE_METER) {
-         /* read rate meter... */
-         speQueue[speHead % lengthof(speQueue)] = FPGA(RATE_SPE);
-         mpeQueue[mpeHead % lengthof(mpeQueue)] = FPGA(RATE_MPE);
-         speHead++; mpeHead++;
-         FPGA(INT_ACK) = FPGABIT(INT_ACK, RATE);
-      }
-      else if (intRequestStatus() & IRQ_SN_UPDATE) {
-         int i;
-         const unsigned long long h1 = FPGA(SYSTIME_MSB);
-         const unsigned sn = FPGA(SN_DATA);
-         const unsigned long long l1 = (sn & 0xffff0000) | 1;
-         const unsigned long long h2 = FPGA(SYSTIME_MSB);
-         unsigned long long ticks;
+   unsigned maxDelay = 3000;
 
-         if (h1==h2) ticks = (h1<<32)|l1;
-         else {
-            if (l1<0x80000000ULL) ticks = (h2<<32)|l1;
-            else                  ticks = (h1<<32)|l1;
-         }
-         
-         /* get sn data */
-         for (i=0; i<4; i++) {
-            const int idx = snHead % lengthof(snEvents);
-            snEvents[idx].counts = (sn>>(4*i))&0xf;
-            snEvents[idx].ticks = ticks - 65536 * (3-i);
-            snHead++;
-         }
-         
-         /* ack the interrupt... */
-         FPGA(INT_ACK) = FPGABIT(INT_ACK, SN);
-      }
-      else {
-         /* yikes!!! */
-      }
+   //   while (intRequestStatus() & (IRQ_CAL_FLASH|IRQ_RATE_METER|IRQ_SN_UPDATE)) {
+   if (intRequestStatus() & IRQ_CAL_FLASH) {
+     if (cmHead!=cmTail) {
+       const unsigned idx = cmTail % lengthof(cmQueue);
+       FPGA(CAL_TIME) = cmQueue[idx];
+       cmTail++;
+     }
+     else {
+       /* interrupt when empty means that we won't be able
+	* to help in the future...
+	*/
+       cmPending = 0;
+     }
+     
+     FPGA(INT_ACK) = FPGABIT(INT_ACK, CAL);
+     waitIRQclear(IRQ_CAL_FLASH, maxDelay);
+   }
+   else if (intRequestStatus() & IRQ_RATE_METER) {
+     /* read rate meter... */
+     speQueue[speHead % lengthof(speQueue)] = FPGA(RATE_SPE);
+     mpeQueue[mpeHead % lengthof(mpeQueue)] = FPGA(RATE_MPE);
+     speHead++; mpeHead++;
+     FPGA(INT_ACK) = FPGABIT(INT_ACK, RATE);
+     waitIRQclear(IRQ_RATE_METER, maxDelay);
+   }
+   else if (intRequestStatus() & IRQ_SN_UPDATE) {
+     int i;
+     const unsigned long long h1 = FPGA(SYSTIME_MSB);
+     const unsigned sn = FPGA(SN_DATA);
+     const unsigned long long l1 = (sn & 0xffff0000) | 1;
+     const unsigned long long h2 = FPGA(SYSTIME_MSB);
+     unsigned long long ticks;
+     
+     if (h1==h2) ticks = (h1<<32)|l1;
+     else {
+       if (l1<0x80000000ULL) ticks = (h2<<32)|l1;
+       else                  ticks = (h1<<32)|l1;
+     }
+     
+     /* get sn data */
+     for (i=0; i<4; i++) {
+       const int idx = snHead % lengthof(snEvents);
+       snEvents[idx].counts = (sn>>(4*i))&0xf;
+       snEvents[idx].ticks = ticks - 65536 * (3-i);
+       snHead++;
+     }
+     /* ack the interrupt... make sure it clears in cpu */
+     FPGA(INT_ACK) = FPGABIT(INT_ACK, SN);
+     waitIRQclear(IRQ_SN_UPDATE, maxDelay);
+   }
+   else {
+     /* yikes!!! */
    }
 }
 
@@ -143,6 +152,7 @@ static void enableIRQ(enum IrqNumbers irq) {
    FPGA(INT_EN) |= irq;
    * (unsigned volatile *) INT_MASK_SET |= irq;
 }
+
 
 unsigned long long hal_FPGA_DOMAPP_get_local_clock(void) {
    unsigned long long h1 = FPGA(SYSTIME_MSB);
