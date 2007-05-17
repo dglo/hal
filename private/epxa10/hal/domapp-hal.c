@@ -511,54 +511,21 @@ void hal_FPGA_DOMAPP_R2R_ladder(const unsigned char *pattern) {
    for (i=0; i<256; i++) addr[i] = pattern[i];
 }
 
-void hal_FPGA_DOMAPP_RG_set_zero_threshold(void) {
-   unsigned *addr = (unsigned *) DOM_FPGA_COMP_CONTROL;
-   *addr |= FPGABIT(COMP_CONTROL, SET_0_THRESH);
+void hal_FPGA_DOMAPP_set_delta_compression_all_avail() {
+  FPGA(COMP_CONTROL) &= ~FPGABIT(COMP_CONTROL, READOUT_LOWGAIN);
+  FPGA(COMP_CONTROL) |= FPGABIT(COMP_CONTROL,  READOUT_BEACON);
 }
 
-void hal_FPGA_DOMAPP_RG_clear_zero_threshold(void) {
-   unsigned *addr = (unsigned *) DOM_FPGA_COMP_CONTROL;
-   *addr &= ~FPGABIT(COMP_CONTROL, SET_0_THRESH);
+void hal_FPGA_DOMAPP_set_delta_compression_lowgain_only() {
+  FPGA(COMP_CONTROL) |= FPGABIT(COMP_CONTROL, READOUT_LOWGAIN);
+  FPGA(COMP_CONTROL) &= ~FPGABIT(COMP_CONTROL, READOUT_BEACON);
 }
 
-void hal_FPGA_DOMAPP_RG_compress_last_only(void) {
-   unsigned *addr = (unsigned *) DOM_FPGA_COMP_CONTROL;
-   *addr |= FPGABIT(COMP_CONTROL, ONLY_LAST);
+void hal_FPGA_DOMAPP_set_delta_compression_lowgain_allbeacon() {
+  FPGA(COMP_CONTROL) |= FPGABIT(COMP_CONTROL, READOUT_LOWGAIN);
+  FPGA(COMP_CONTROL) |= FPGABIT(COMP_CONTROL, READOUT_BEACON);
 }
 
-void hal_FPGA_DOMAPP_RG_compress_all(void) {
-   unsigned *addr = (unsigned *) DOM_FPGA_COMP_CONTROL;
-   *addr &= ~FPGABIT(COMP_CONTROL, ONLY_LAST);
-}
-
-void hal_FPGA_DOMAPP_RG_fadc_threshold(short thresh) {
-   unsigned *addr = (unsigned *) DOM_FPGA_FADC_THRESHOLD;
-   *addr = thresh&0x3ff;
-}
-
-void hal_FPGA_DOMAPP_RG_atwd_threshold(short chip, short ch, short thresh) {
-   unsigned *addr = (unsigned *) DOM_FPGA_FADC_THRESHOLD;
-   unsigned mask, val;
-   
-   chip &= 1;
-   addr += chip*2;
-   
-   ch &= 3;
-   addr += (ch/2);
-
-   if ( (ch%2) == 0 ) {
-      /* low bits... */
-      mask = ~0x3ff;
-      val = thresh;
-   }
-   else {
-      /* high bits... */
-      mask = ~(0x3ff<<16);
-      val = thresh<<16;
-   }
-
-   *addr = (*addr & mask) | val;
-}
 
 #if 0
 static int ticks;

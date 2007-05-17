@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_domapp.h
  *
- * $Revision: 1.1.1.15 $
- * $Author: arthur $
- * $Date: 2006-07-21 19:36:31 $
+ * $Revision: 1.1.1.16 $
+ * $Author: jacobsen $
+ * $Date: 2007-05-17 20:14:09 $
  *
  * \b Usage:
  * \code
@@ -144,8 +144,8 @@ typedef enum {
    HAL_FPGA_DOMAPP_ATWD_MODE_TESTING   = (1<<12),
    /** for debugging */
    HAL_FPGA_DOMAPP_ATWD_MODE_DEBUGGING = (2<<12),
-   /** undecided */
-   HAL_FPGA_DOMAPP_ATWD_MODE_TBD       = (3<<12),
+   /** beacon mode - all for beacons, normal for SPEs */
+   HAL_FPGA_DOMAPP_ATWD_MODE_BEACON    = (3<<12),
 } HAL_FPGA_DOMAPP_ATWD_MODES;
 
 /**
@@ -226,6 +226,13 @@ typedef enum {
  */
 void
 hal_FPGA_DOMAPP_compression_mode(HAL_FPGA_DOMAPP_COMPRESSION_MODES mode);
+
+/** Compress and store all available ATWD channels */
+void hal_FPGA_DOMAPP_set_delta_compression_all_avail();
+/** Compress and store all available only lowest gain ATWD channel */
+void hal_FPGA_DOMAPP_set_delta_compression_lowgain_only();
+/** Compress and store all available ATWD channels for beacons, lowest gain for SPEs */
+void hal_FPGA_DOMAPP_set_delta_compression_lowgain_allbeacon();
 
 /**
  * lookback memory pointer access mask -- we only use
@@ -625,56 +632,15 @@ hal_FPGA_DOMAPP_pedestal(int atwd, int channel, const short *pattern);
 void
 hal_FPGA_DOMAPP_R2R_ladder(const unsigned char *pattern);
 
-/**
- * roadgrader: set all thresholds to zero
- */
-void
-hal_FPGA_DOMAPP_RG_set_zero_threshold(void);
-
-/**
- * roadgrader: clear all thresholds to zero
- */
-void
-hal_FPGA_DOMAPP_RG_clear_zero_threshold(void);
-
-/**
- * roadgrader, compress only the last ATWD channel
- */
-void
-hal_FPGA_DOMAPP_RG_compress_last_only(void);
-
-/**
- * roadgrader, compress all ATWD channels
- */
-void
-hal_FPGA_DOMAPP_RG_compress_all(void);
-
-/**
- * roadgrader, set FADC threshold
- *
- * \param thresh threshold (0..1023)
- */
-void
-hal_FPGA_DOMAPP_RG_fadc_threshold(short thresh);
-
-/**
- * roadgrader, set ATWD thresholds
- *
- * \param chip (0=A..1=B)
- * \param channel (0..3)
- * \param thresh threshold (0..1023)
- */
-void
-hal_FPGA_DOMAPP_RG_atwd_threshold(short chip, short channel, short thresh);
-
-typedef struct HALDOMAPPRegStruct {
-   const char *name;
-   unsigned reg;
-} HALDOMAPPReg;
 
 /**
  * debugging only...
  */
+typedef struct HALDOMAPPRegStruct {
+  const char *name;
+  unsigned reg;
+} HALDOMAPPReg;
+
 int
 hal_FPGA_DOMAPP_dump_regs(HALDOMAPPReg *regs, int n);
 

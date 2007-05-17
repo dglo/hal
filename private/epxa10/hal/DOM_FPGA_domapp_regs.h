@@ -180,8 +180,8 @@
  * Compression control
  */
 #define DOM_FPGA_COMP_CONTROL (DOM_FPGA_BASE + 0x540)
-#define DOM_FPGA_COMP_CONTROL_SET_0_THRESH 1
-#define DOM_FPGA_COMP_CONTROL_ONLY_LAST    2
+#define DOM_FPGA_COMP_CONTROL_READOUT_LOWGAIN  1
+#define DOM_FPGA_COMP_CONTROL_READOUT_BEACON   2
 
 /**
  * FADC compression thresholds
