@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_domapp.h
  *
- * $Revision: 1.1.1.16 $
+ * $Revision: 1.1.1.17 $
  * $Author: jacobsen $
- * $Date: 2007-05-17 20:14:09 $
+ * $Date: 2007-08-02 17:23:27 $
  *
  * \b Usage:
  * \code
@@ -499,7 +499,9 @@ hal_FPGA_DOMAPP_FB_get_attn(void);
 typedef enum {
    HAL_FPGA_DOMAPP_RATE_MONITOR_OFF = 0,
    HAL_FPGA_DOMAPP_RATE_MONITOR_SPE = 1,
-   HAL_FPGA_DOMAPP_RATE_MONITOR_MPE = 2
+   HAL_FPGA_DOMAPP_RATE_MONITOR_MPE = 2,
+   HAL_FPGA_DOMAPP_RATE_MONITOR_DEADTIME_ATWD_A = (1<<8),
+   HAL_FPGA_DOMAPP_RATE_MONITOR_DEADTIME_ATWD_B = (2<<8)
 } HAL_FPGA_DOMAPP_RATE_MONITORS;
 
 /**
@@ -558,6 +560,12 @@ hal_FPGA_DOMAPP_spe_rate_immediate(void);
  */
 unsigned
 hal_FPGA_DOMAPP_mpe_rate_immediate(void);
+
+/** 
+ * get deadtime 
+ */
+unsigned
+hal_FPGA_DOMAPP_deadtime_immediate(void);
 
 /**
  * supernova modes

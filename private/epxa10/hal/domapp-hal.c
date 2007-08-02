@@ -385,7 +385,7 @@ void hal_FPGA_DOMAPP_rate_monitor_enable(int mask) {
       enableIRQ(IRQ_RATE_METER);
    }
    FPGA(RATE_CONTROL) = 
-      ( FPGA(RATE_CONTROL) & ~FPGABIT(RATE_CONTROL, ENABLE) ) | (mask&3);
+      ( FPGA(RATE_CONTROL) & ~FPGABIT(RATE_CONTROL, ENABLE) ) | (mask&3) | ((mask>>8)&3);
 }
 
 int hal_FPGA_DOMAPP_rate_monitor_deadtime(int time) {
@@ -445,6 +445,7 @@ int hal_FPGA_DOMAPP_mpe_rate(unsigned *mpe) {
 
 unsigned hal_FPGA_DOMAPP_spe_rate_immediate(void) { return FPGA(RATE_SPE); }
 unsigned hal_FPGA_DOMAPP_mpe_rate_immediate(void) { return FPGA(RATE_MPE); }
+unsigned hal_FPGA_DOMAPP_deadtime_immediate(void) { return FPGA(DEADTIME); }
 
 void hal_FPGA_DOMAPP_sn_mode(HAL_FPGA_DOMAPP_SN_MODES mode) {
    if (mode==HAL_FPGA_DOMAPP_SN_MODE_OFF) {

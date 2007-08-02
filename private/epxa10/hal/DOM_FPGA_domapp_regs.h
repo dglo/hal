@@ -129,6 +129,11 @@
 #define DOM_FPGA_RATE_MPE (DOM_FPGA_BASE + 0x488)
 
 /**
+ * Deadtime monitor
+ */
+#define DOM_FPGA_DEADTIME (DOM_FPGA_BASE + 0x490)
+
+/**
  * Supernova meter control
  */
 #define DOM_FPGA_SN_CONTROL (DOM_FPGA_BASE + 0x4a0)
