@@ -385,7 +385,7 @@ void hal_FPGA_DOMAPP_rate_monitor_enable(int mask) {
       enableIRQ(IRQ_RATE_METER);
    }
    FPGA(RATE_CONTROL) = 
-      ( FPGA(RATE_CONTROL) & ~FPGABIT(RATE_CONTROL, ENABLE) ) | (mask&3) | ((mask>>8)&3);
+     ( FPGA(RATE_CONTROL) & ~FPGABIT(RATE_CONTROL, ENABLE) ) | (mask&0x303);
 }
 
 int hal_FPGA_DOMAPP_rate_monitor_deadtime(int time) {
