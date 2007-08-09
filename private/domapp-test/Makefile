@@ -4,7 +4,7 @@ KOBJS = ../lib/crt0.o ../lib/libkernel.a
 
 all: ../bin/domapp-test.bin.gz ../bin/deadtime-test.bin.gz
 
-.c.o:
+%.o : %.c *.h
 	$(CC) -c $(CFLAGS) $<
 
 .S.o:

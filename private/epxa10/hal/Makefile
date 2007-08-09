@@ -4,7 +4,7 @@
 #
 OBJS = hal.o fpga-hal.o fb-hal.o comm-hal.o domapp-hal.o
 
-.c.o:
+%.o : %.c *.h
 	$(CC) -c $(CFLAGS) $<
 
 all: $(LIBHAL)
