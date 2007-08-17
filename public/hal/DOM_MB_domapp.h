@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_domapp.h
  *
- * $Revision: 1.1.1.17 $
+ * $Revision: 1.1.1.18 $
  * $Author: jacobsen $
- * $Date: 2007-08-02 17:23:27 $
+ * $Date: 2007-08-17 21:43:20 $
  *
  * \b Usage:
  * \code
@@ -281,14 +281,17 @@ hal_FPGA_DOMAPP_lbm_pointer(void);
  * \see hal_FPGA_DOMAPP_lc_enable
  */
 typedef enum {
-   /** enable sending up */
-   HAL_FPGA_DOMAPP_LC_ENABLE_SEND_UP   = 1,
-   /** enable sending down */
-   HAL_FPGA_DOMAPP_LC_ENABLE_SEND_DOWN = 2,
-   /** enable rcv up */
-   HAL_FPGA_DOMAPP_LC_ENABLE_RCV_UP    = 4,
-   /** enable rcv down */
-   HAL_FPGA_DOMAPP_LC_ENABLE_RCV_DOWN  = 8
+  /** enable sending up */
+  HAL_FPGA_DOMAPP_LC_ENABLE_SEND_UP   = (1<<0),
+  /** enable sending down */
+  HAL_FPGA_DOMAPP_LC_ENABLE_SEND_DOWN = (1<<1),
+  /** enable rcv up */
+  HAL_FPGA_DOMAPP_LC_ENABLE_RCV_UP    = (1<<2),
+  /** enable rcv down */
+  HAL_FPGA_DOMAPP_LC_ENABLE_RCV_DOWN  = (1<<3),
+  /** enable rcv up && down requirement 
+      (must assert along with RCV_UP and RCV_DOWN */
+  HAL_FPGA_DOMAPP_LC_ENABLE_RECV_UP_AND_DOWN = (1<<6)
 } HAL_FPGA_DOMAPP_LC_ENABLES;
 
 /**
