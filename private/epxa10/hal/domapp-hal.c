@@ -194,6 +194,15 @@ void hal_FPGA_DOMAPP_compression_mode(HAL_FPGA_DOMAPP_COMPRESSION_MODES mode) {
    FPGA(DAQ) = ( FPGA(DAQ) & ~FPGABIT(DAQ, COMP_MODE) ) | mode;
 }
 
+void hal_FPGA_DOMAPP_enable_icetop_chargestamp(void) {
+   FPGA(DAQ) |= FPGABIT(DAQ, ICETOP);
+}
+
+void hal_FPGA_DOMAPP_disable_icetop_chargestamp(void) {
+   FPGA(DAQ) &= ~FPGABIT(DAQ, ICETOP);
+}
+
+
 void hal_FPGA_DOMAPP_lbm_reset(void) {
    FPGA(LBM_CONTROL) |= FPGABIT(LBM_CONTROL, RESET);
 }
@@ -527,6 +536,24 @@ void hal_FPGA_DOMAPP_set_delta_compression_lowgain_allbeacon() {
   FPGA(COMP_CONTROL) |= FPGABIT(COMP_CONTROL, READOUT_BEACON);
 }
 
+void hal_FPGA_DOMAPP_set_icetop_chargestamp_mode(HAL_FPGA_DOMAPP_ICETOP_MODES mode, int chan) {
+  /* Chan must be <= FPGABIT(ICETOP_CONTROL, CHANNEL) */
+  if(mode == HAL_FPGA_DOMAPP_ICETOP_MODE_AUTO) {
+    FPGA(ICETOP_CONTROL) = 
+      (FPGA(ICETOP_CONTROL) 
+       & ~FPGABIT(ICETOP_CONTROL, CHANNEL))
+      | FPGABIT(ICETOP_CONTROL, CHSEL)
+      | (chan & FPGABIT(ICETOP_CONTROL, CHANNEL));
+  } else if(mode == HAL_FPGA_DOMAPP_ICETOP_MODE_CHAN) {
+    FPGA(ICETOP_CONTROL) = 
+      (FPGA(ICETOP_CONTROL) 
+       & ~FPGABIT(ICETOP_CONTROL, CHANNEL)
+       & ~FPGABIT(ICETOP_CONTROL, CHSEL))
+      | (chan & FPGABIT(ICETOP_CONTROL, CHANNEL));
+  } else {
+    /* Ignore */
+  }
+}
 
 #if 0
 static int ticks;

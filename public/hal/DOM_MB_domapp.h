@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_domapp.h
  *
- * $Revision: 1.1.1.18 $
+ * $Revision: 1.1.1.19 $
  * $Author: jacobsen $
- * $Date: 2007-08-17 21:43:20 $
+ * $Date: 2007-10-29 22:01:23 $
  *
  * \b Usage:
  * \code
@@ -643,6 +643,30 @@ hal_FPGA_DOMAPP_pedestal(int atwd, int channel, const short *pattern);
 void
 hal_FPGA_DOMAPP_R2R_ladder(const unsigned char *pattern);
 
+/**
+ * Enable IceTop-mode charge stamps
+ */ 
+void
+hal_FPGA_DOMAPP_enable_icetop_chargestamp(void);
+
+/**
+ * Disable IceTop-mode charge stamps
+ */
+void
+hal_FPGA_DOMAPP_disable_icetop_chargestamp(void);
+
+/**
+ * Set mode and channel for IceTop charge stamps - 
+ * must be <= FPGABIT(ICETOP_CONTROL, CHANNEL) (see DOM_FPGA_domapp_regs.h)
+ */
+typedef enum {
+  HAL_FPGA_DOMAPP_ICETOP_MODE_AUTO=0,
+  HAL_FPGA_DOMAPP_ICETOP_MODE_CHAN=1,
+} HAL_FPGA_DOMAPP_ICETOP_MODES;
+
+void
+hal_FPGA_DOMAPP_set_icetop_chargestamp_mode(HAL_FPGA_DOMAPP_ICETOP_MODES mode, 
+					    int chan);
 
 /**
  * debugging only...
@@ -654,5 +678,6 @@ typedef struct HALDOMAPPRegStruct {
 
 int
 hal_FPGA_DOMAPP_dump_regs(HALDOMAPPReg *regs, int n);
+
 
 #endif
