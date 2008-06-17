@@ -202,6 +202,14 @@ void hal_FPGA_DOMAPP_disable_icetop_chargestamp(void) {
    FPGA(DAQ) &= ~FPGABIT(DAQ, ICETOP);
 }
 
+void hal_FPGA_DOMAPP_enable_minbias(void) {
+  FPGA(DAQ) |= FPGABIT(DAQ, MINBIAS);
+}
+
+void hal_FPGA_DOMAPP_disable_minbias(void) {
+  FPGA(DAQ) &= ~FPGABIT(DAQ, MINBIAS);
+}
+
 
 void hal_FPGA_DOMAPP_lbm_reset(void) {
    FPGA(LBM_CONTROL) |= FPGABIT(LBM_CONTROL, RESET);

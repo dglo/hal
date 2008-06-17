@@ -36,6 +36,7 @@
 #  define DOM_FPGA_DAQ_LBM_MODE    0x00700000
 #  define DOM_FPGA_DAQ_COMP_MODE   0x07000000
 #  define DOM_FPGA_DAQ_ICETOP      0x10000000
+#  define DOM_FPGA_DAQ_MINBIAS     0x20000000
 
 /**
  * LBM Control -- lookback memory control

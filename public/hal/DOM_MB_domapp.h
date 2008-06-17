@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_domapp.h
  *
- * $Revision: 1.1.1.19 $
+ * $Revision: 1.1.1.20 $
  * $Author: jacobsen $
- * $Date: 2007-10-29 22:01:23 $
+ * $Date: 2008-06-18 01:56:13 $
  *
  * \b Usage:
  * \code
@@ -678,6 +678,14 @@ typedef struct HALDOMAPPRegStruct {
 
 int
 hal_FPGA_DOMAPP_dump_regs(HALDOMAPPReg *regs, int n);
+
+/**
+ * Turn on/off icetop minbias mode
+ */
+void
+hal_FPGA_DOMAPP_enable_minbias(void);
+void
+hal_FPGA_DOMAPP_disable_minbias(void);
 
 
 #endif
