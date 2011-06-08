@@ -62,6 +62,32 @@
 #define DOM_FPGA_COMM_ERRORS      (0x90000518)
 /*@}*/
 
+/**
+ * \defgroup fpga_comm_clev comm level adaption
+ * \ingroup fpga_test_regs
+ *
+ * \brief access the communication level adaption min and max values
+ * min: bits 0..9
+ * max: bits 16..25
+ */
+/*@{*/
+#define DOM_FPGA_COMM_CLEV    (0x90000520)
+/*@}*/
+
+/**
+ * \defgroup fpga_comm_thr_del comm threshold and delays
+ * \ingroup fpga_test_regs
+ *
+ * \brief access the communications thresholds and other comm parameters...
+ * com_thr: 7..0 
+ * dacmax: 9..8
+ * rec_del: 23..16
+ * send_del: 31..24
+ */
+/*@{*/
+#define DOM_FPGA_COMM_THR_DEL (0x90000524)
+/*@}*/
+
 #endif
 
 

@@ -34,7 +34,9 @@
 #  define DOM_FPGA_DAQ_ATWD_MODE   0x00007000
 #  define DOM_FPGA_DAQ_LC_MODE     0x00070000
 #  define DOM_FPGA_DAQ_LBM_MODE    0x00700000
-#  define DOM_FPGA_DAQ_COMP_MODE   0x3f000000
+#  define DOM_FPGA_DAQ_COMP_MODE   0x07000000
+#  define DOM_FPGA_DAQ_ICETOP      0x10000000
+#  define DOM_FPGA_DAQ_MINBIAS     0x20000000
 
 /**
  * LBM Control -- lookback memory control
@@ -129,11 +131,16 @@
 #define DOM_FPGA_RATE_MPE (DOM_FPGA_BASE + 0x488)
 
 /**
+ * Deadtime monitor
+ */
+#define DOM_FPGA_DEADTIME (DOM_FPGA_BASE + 0x490)
+
+/**
  * Supernova meter control
  */
 #define DOM_FPGA_SN_CONTROL (DOM_FPGA_BASE + 0x4a0)
 #define DOM_FPGA_SN_CONTROL_ENABLE     3
-#define DOM_FPGA_SN_CONTROL_DEAD_TIME (0x7<<16)
+#define DOM_FPGA_SN_CONTROL_DEAD_TIME (0x7f<<16)
 
 /**
  * Supernova meter control
@@ -180,8 +187,8 @@
  * Compression control
  */
 #define DOM_FPGA_COMP_CONTROL (DOM_FPGA_BASE + 0x540)
-#define DOM_FPGA_COMP_CONTROL_SET_0_THRESH 1
-#define DOM_FPGA_COMP_CONTROL_ONLY_LAST    2
+#define DOM_FPGA_COMP_CONTROL_READOUT_LOWGAIN  1
+#define DOM_FPGA_COMP_CONTROL_READOUT_BEACON   2
 
 /**
  * FADC compression thresholds
@@ -195,6 +202,13 @@
 #define DOM_FPGA_ATWD_A_23_THRESHOLD (DOM_FPGA_BASE + 0x54c)
 #define DOM_FPGA_ATWD_B_01_THRESHOLD (DOM_FPGA_BASE + 0x550)
 #define DOM_FPGA_ATWD_B_23_THRESHOLD (DOM_FPGA_BASE + 0x554)
+
+/** 
+ * IceTop Control
+ */
+#define DOM_FPGA_ICETOP_CONTROL (DOM_FPGA_BASE + 0x560)
+#define DOM_FPGA_ICETOP_CONTROL_CHANNEL 0x00000003
+#define DOM_FPGA_ICETOP_CONTROL_CHSEL   0x00000010
 
 /**
  * pong

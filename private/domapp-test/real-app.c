@@ -503,13 +503,13 @@ static int setRateEnable(const char *val) {
 }
 
 static int setSNMode(const char *mode) {
-   if (strcmp(mode, "SPE")==0) {
+   if (strcmp(mode, "spe")==0) {
       hal_FPGA_DOMAPP_sn_mode(HAL_FPGA_DOMAPP_SN_MODE_SPE);
    }
-   else if (strcmp(mode, "MPE")==0) {
+   else if (strcmp(mode, "mpe")==0) {
       hal_FPGA_DOMAPP_sn_mode(HAL_FPGA_DOMAPP_SN_MODE_MPE);
    }
-   else if (strcmp(mode, "OFF")==0) {
+   else if (strcmp(mode, "off")==0) {
       hal_FPGA_DOMAPP_sn_mode(HAL_FPGA_DOMAPP_SN_MODE_OFF);
    }
    else return 1;
@@ -518,6 +518,29 @@ static int setSNMode(const char *mode) {
 
 static int setSNDeadTime(const char *ns) {
    hal_FPGA_DOMAPP_sn_dead_time(atoi(ns));
+   return 0;
+}
+
+static int setRateDeadTime(const char *ns) {
+   hal_FPGA_DOMAPP_rate_monitor_deadtime(atoi(ns));
+   return 0;
+}
+
+static int setHV(const char *v) {
+   if (strcmp(v, "on")==0) {
+      halPowerUpBase();
+      halEnableBaseHV();
+   }
+   else if (strcmp(v, "off")==0) {
+      halPowerDownBase();
+   }
+   else return 1;
+   
+   return 0;
+}
+
+static int setBaseDAC(const char *counts) {
+   halWriteBaseDAC(atoi(counts));
    return 0;
 }
 
@@ -543,6 +566,9 @@ static int setConf(const char *name, const char *val) {
    else if (strcmp(name, "rate_enable")==0)      return setRateEnable(val);
    else if (strcmp(name, "sn_mode")==0)          return setSNMode(val);
    else if (strcmp(name, "sn_dead_time")==0)     return setSNDeadTime(val);
+   else if (strcmp(name, "rate_dead_time")==0)   return setRateDeadTime(val);
+   else if (strcmp(name, "hv")==0)               return setHV(val);
+   else if (strcmp(name, "base_dac")==0)         return setBaseDAC(val);
 
    return 1;
 }
@@ -772,11 +798,48 @@ static int pedsMsg(const char *ver) {
    return 0;
 }
 
+/* fill buf with 0 terminated message received... */
+static void nextMsg(char *buf) {
+   static int bidx = 0;
+   static char buffer[4096*2];
+      
+   /* check for messages... */
+   while (1) {
+      char *t;
+
+      if (bidx>0 && 
+          ((t=memchr(buffer, '\n', bidx))!=NULL ||
+           (t=memchr(buffer, '\r', bidx))!=NULL)) {
+         int n = t - buffer;
+         
+         /* copy to buf, without trailing whitespace... */
+         while (n>0 && 
+                (buffer[n-1]==' ' || buffer[n-1]=='\r' || buffer[n-1]=='\n')) 
+            n--;
+         
+         if (n>0) memcpy(buf, buffer, n);
+
+         bidx = (buffer + bidx) - (t + 1);
+         
+         if (bidx>0) memmove(buffer, t + 1, bidx);
+         
+         buf[n] = 0;
+         return;
+      }
+
+      /* fill up... */
+      bidx += receive(buffer + bidx);
+
+      /* quietly truncate messages over 4k */
+      if (bidx>4096) bidx=0;
+   }
+}
+
 int main(void) {
    /* ticker(); */
    enum { CONF, RUNNING } state = CONF;
    unsigned lbmp = 0;
-   
+
    /* get into a known state... */
    hal_FPGA_DOMAPP_disable_daq();
    halUSleep(1000); /* make sure atwd is done... */
@@ -784,14 +847,8 @@ int main(void) {
    
    while (1) {
       char buf[4096];
-      int nr;
-      
-      /* check for messages... */
-      nr = receive(buf);
 
-      /* remove trailing newline... */
-      while (nr>0 && (buf[nr-1]=='\n' || buf[nr-1]=='\r')) nr--;
-      buf[nr] = 0;
+      nextMsg(buf);
       
       if (memcmp(buf, "MONI", 4)==0) {
          moniMsg();
