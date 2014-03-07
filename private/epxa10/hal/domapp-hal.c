@@ -37,11 +37,11 @@ enum IrqNumbers {
 }; 
 
 /* we keep a queue of sn events, we would like
- * to keep 10s worth of data, this amounts to
- * 10 s / 4 e/1.6ms -> 4000 entries...
+ * to keep 20s worth of data, this amounts to
+ * 20 s / 4 e/1.6ms -> 8000 entries...
  */
 static unsigned short snHead, snTail;
-static SNEvent snEvents[4096];
+static SNEvent snEvents[8192];
 
 static unsigned short speHead, speTail, mpeHead, mpeTail;
 static unsigned speQueue[128], mpeQueue[128];
