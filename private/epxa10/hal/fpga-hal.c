@@ -232,6 +232,17 @@ static int typeIdx(DOM_HAL_FPGA_TYPES type) {
    return -1;
 }
 
+/* return dom comm fpga version... */
+int hal_FPGA_dom_comm_version(void) {
+   const unsigned *rom = (const unsigned *) DOM_FPGA_VERSIONING;
+   return rom[FPGA_VERSIONS_DOM_COMM_INDEX];
+}
+
+/* return expected dom comm fpga version... */
+int hal_FPGA_dom_comm_expected_version(void) {
+   return FPGA_VERSIONS_DOM_COMM_VERSION;
+}
+
 /* return component version number... */
 int hal_FPGA_query_component_version(DOM_HAL_FPGA_COMPONENTS cmp) {
    const unsigned *rom = (const unsigned *) DOM_FPGA_VERSIONING;
@@ -490,9 +501,8 @@ void hal_FPGA_TEST_disable_LED(void) {
 }
 
 void hal_FPGA_TEST_set_atwd_LED_delay(int delay) {
-    /* Only low 4 bits used */
     FPGA(TEST_LED_ATWD_DELAY) = 
-       (FPGA(TEST_LED_ATWD_DELAY)&0xf) | (delay & 0xf);
+       (FPGA(TEST_LED_ATWD_DELAY) & (~0xf)) | (delay & 0xf);
 }
 
 void hal_FPGA_TEST_start_FB_flashing(void) {
@@ -585,7 +595,6 @@ void hal_FPGA_TEST_init_state(void) {
    FPGA(TEST_SINGLE_SPE_RATE) = 0;
    FPGA(TEST_MULTIPLE_SPE_RATE) = 0;
    FPGA(TEST_MISC) = 0;
-   FPGA(TEST_HDV_CONTROL) = 0;
    FPGA(TEST_SINGLE_SPE_RATE_FPGA) = 0;
    FPGA(TEST_MULTIPLE_SPE_RATE_FPGA) = 0;
    FPGA(TEST_AHB_MASTER_TEST) = DOMPulserRate78k;
@@ -676,12 +685,33 @@ int hal_FPGA_TEST_spe_lc_enabled(int * ena_lo, int * ena_hi) {
   return 1;
 }
 
-void hal_FPGA_TEST_enable_spe_lc(int ena_lo, int ena_hi) {
-  /** Must set ena_lo and/or ena_hi for this to do anything */
+void hal_FPGA_TEST_enable_spe_lc(int ena_lo, int ena_hi, DOM_HAL_LC_LOGIC_T logic_mode) {
+  /* LC will be disabled if ena_lo and ena_hi are both false.
+     up AND down is enabled if and only if
+     ena_lo, ena_hi are TRUE and logic_mode is AND.
+  */
   if(ena_lo || ena_hi) {
     FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, LOCAL_SPE);
-    if(ena_lo) FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, LOCAL_RX_LO);
-    if(ena_hi) FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, LOCAL_RX_HI);
+  } else {
+    FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_SPE);
+  }
+
+  if(ena_lo) {
+    FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, LOCAL_RX_LO);
+  } else {
+    FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_RX_LO);
+  }
+
+  if(ena_hi) {
+    FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, LOCAL_RX_HI);
+  } else {
+    FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_RX_HI);
+  }
+
+  if(ena_lo && ena_hi && logic_mode == DOM_HAL_LC_LOGIC_AND) {
+    FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, LOCAL_REQUIRE_UP_DOWN);
+  } else {
+    FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_REQUIRE_UP_DOWN);
   }
 }
 
@@ -689,4 +719,13 @@ void hal_FPGA_TEST_disable_spe_lc(void) {
   FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_SPE);
   FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_RX_LO);
   FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_RX_HI);
+  FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_REQUIRE_UP_DOWN);
+}
+
+void hal_FPGA_TEST_lc_sync_ff(void) {
+   FPGA(TEST_MISC) |= FPGABIT(TEST_MISC, LOCAL_SYNC_FF);
+}
+
+void hal_FPGA_TEST_lc_sync_comparator(void) {
+   FPGA(TEST_MISC) &= ~FPGABIT(TEST_MISC, LOCAL_SYNC_FF);
 }

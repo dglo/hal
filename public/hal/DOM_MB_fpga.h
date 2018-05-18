@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_fpga.h
  *
- * $Revision: 1.45 $
- * $Author: jkelley $
- * $Date: 2005-04-22 18:28:16 $
+ * $Revision: 1.1.1.15 $
+ * $Author: arthur $
+ * $Date: 2006-07-21 19:36:31 $
  *
  * \b Usage:
  * \code
@@ -208,6 +208,28 @@ hal_FPGA_receive(int *type, int *len, char *msg);
  */
 #define hal_FPGA_TEST_receive(a, b, c) hal_FPGA_receive(a, b, c)
 
+/**
+ * set communications parameters
+ *
+ * \param minclev minimum level for signal leveling
+ * \param maxclev maximum level for signal leveling
+ * \param thresh threshold for edge detection
+ * \param rdelay receiver delay
+ * \param sdelay send delay
+ */
+void
+hal_FPGA_set_comm_params(int thresh, int dacmax,
+                         int rdelay, int sdelay,
+                         int minclev, int maxclev);
+
+/**
+ * set maximum level for auto communications signal leveling
+ *
+ * \param maxclev ADC counts
+ */
+int hal_FPGA_set_maxclev(int maxclev);
+
+
 /** 
  * fpga types.
  *
@@ -290,6 +312,16 @@ hal_FPGA_query_component_version(DOM_HAL_FPGA_COMPONENTS cmp);
 int 
 hal_FPGA_query_component_expected(DOM_HAL_FPGA_TYPES type,
                                   DOM_HAL_FPGA_COMPONENTS cmp);
+
+/**
+ * query fpga dom communications version
+ */
+int hal_FPGA_dom_comm_version(void);
+
+/**
+ * return compiled in dom communications version
+ */
+int hal_FPGA_dom_comm_expected_version(void);
 
 /**
  * check fpga version numbers.
@@ -784,12 +816,16 @@ int hal_FPGA_TEST_set_lc_launch_window(int up_pre_ns,
 				       int down_pre_ns,
 				       int down_post_ns);
 
-#endif
+typedef enum {
+  DOM_HAL_LC_LOGIC_OR,
+  DOM_HAL_LC_LOGIC_AND
+} DOM_HAL_LC_LOGIC_T;
 
 /**
  * Enable transmission of LC pulses when SPE disc. fires
  */
-void hal_FPGA_TEST_enable_spe_lc(int ena_lo, int ena_hi);
+void hal_FPGA_TEST_enable_spe_lc(int ena_lo, int ena_hi,
+                                DOM_HAL_LC_LOGIC_T logic_mode);
 
 /**
  * Disable transmission of LC pulses when SPE disc. fires
@@ -800,4 +836,20 @@ void hal_FPGA_TEST_disable_spe_lc(void);
  * Query whether SPE->LC enable is set
  */
 int hal_FPGA_TEST_spe_lc_enabled(int * ena_lo, int * ena_hi);
+
+/**
+ * Use an FPGA FF to synchronize LC signals
+ *
+ * \see hal_FPGA_TEST_lc_sync_comparator
+ */
+void hal_FPGA_TEST_lc_sync_ff(void);
+
+/**
+ * Use comparator latches to synchronize LC signals
+ *
+ * \see hal_FPGA_TEST_lc_sync_ff
+ */
+void hal_FPGA_TEST_lc_sync_comparator(void);
+
+#endif
 

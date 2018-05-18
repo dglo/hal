@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_pld.h
  *
- * $Revision: 1.2 $
- * $Author: mcp $
- * $Date: 2003-03-14 02:06:02 $
+ * $Revision: 1.1.1.15 $
+ * $Author: arthur $
+ * $Date: 2006-07-21 19:36:31 $
  *
  * \b Usage:
  * \code

@@ -572,4 +572,18 @@ int hal_FPGA_query_component_version(DOM_HAL_FPGA_COMPONENTS cmp) {
    return -1;
 }
 
+int hal_FPGA_dom_comm_version(void) {
+   return 0;
+}
 
+int hal_FPGA_dom_comm_expected_version(void) {
+   return 0;
+}
+
+void hal_FPGA_set_comm_params(int thresh, int dacmax,
+                              int rdelay, int sdelay,
+                              int minclev, int maxclev) {}
+
+
+void hal_FPGA_TEST_lc_sync_ff(void) {}
+void hal_FPGA_TEST_lc_sync_comparator(void) {}

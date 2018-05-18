@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_domapp.h
  *
- * $Revision: 1.21 $
- * $Author: arthur $
- * $Date: 2005-05-27 00:55:53 $
+ * $Revision: 1.1.1.20 $
+ * $Author: jacobsen $
+ * $Date: 2008-06-18 01:56:13 $
  *
  * \b Usage:
  * \code
@@ -70,6 +70,7 @@ hal_FPGA_DOMAPP_trigger_source(int srcs);
  * \see hal_FPGA_DOMAPP_daq_mode
  * \see hal_FPGA_DOMAPP_atwd_mode
  * \see hal_FPGA_DOMAPP_lc_mode
+ * \see hal_FPGA_DOMAPP_self_lc_mode
  * \see hal_FPGA_DOMAPP_lbm_mode
  * \see hal_FPGA_DOMAPP_compression_mode
  */
@@ -83,6 +84,7 @@ hal_FPGA_DOMAPP_enable_daq(void);
  * \see hal_FPGA_DOMAPP_daq_mode
  * \see hal_FPGA_DOMAPP_atwd_mode
  * \see hal_FPGA_DOMAPP_lc_mode
+ * \see hal_FPGA_DOMAPP_self_lc_mode
  * \see hal_FPGA_DOMAPP_lbm_mode
  * \see hal_FPGA_DOMAPP_compression_mode
  */
@@ -144,8 +146,8 @@ typedef enum {
    HAL_FPGA_DOMAPP_ATWD_MODE_TESTING   = (1<<12),
    /** for debugging */
    HAL_FPGA_DOMAPP_ATWD_MODE_DEBUGGING = (2<<12),
-   /** undecided */
-   HAL_FPGA_DOMAPP_ATWD_MODE_TBD       = (3<<12),
+   /** beacon mode - all for beacons, normal for SPEs */
+   HAL_FPGA_DOMAPP_ATWD_MODE_BEACON    = (3<<12),
 } HAL_FPGA_DOMAPP_ATWD_MODES;
 
 /**
@@ -178,6 +180,30 @@ typedef enum {
  */
 void
 hal_FPGA_DOMAPP_lc_mode(HAL_FPGA_DOMAPP_LC_MODES mode);
+
+/**
+ * self local coincidence modes
+ *
+ * \see hal_FPGA_DOMAPP_self_lc_mode
+ */
+typedef enum {
+   /** off, no self local coincidence */
+   HAL_FPGA_DOMAPP_SELF_LC_MODE_OFF    = (0<<8),
+   /** use SPE discriminator for self-LC */
+   HAL_FPGA_DOMAPP_SELF_LC_MODE_SPE    = (1<<8),
+   /** use MPE discriminator for self-LC */
+   HAL_FPGA_DOMAPP_SELF_LC_MODE_MPE    = (2<<8),
+   /** TBD */
+   HAL_FPGA_DOMAPP_SELF_LC_MODE_TBD    = (3<<8),
+} HAL_FPGA_DOMAPP_SELF_LC_MODES;
+
+/**
+ * set self lc mode
+ *
+ * \param mode one of hal_FPGA_DOMAPP_SELF_LC_MODES
+ */
+void
+hal_FPGA_DOMAPP_self_lc_mode(HAL_FPGA_DOMAPP_SELF_LC_MODES mode);
 
 /**
  * lookback memory buffer modes...
@@ -227,6 +253,13 @@ typedef enum {
 void
 hal_FPGA_DOMAPP_compression_mode(HAL_FPGA_DOMAPP_COMPRESSION_MODES mode);
 
+/** Compress and store all available ATWD channels */
+void hal_FPGA_DOMAPP_set_delta_compression_all_avail();
+/** Compress and store all available only lowest gain ATWD channel */
+void hal_FPGA_DOMAPP_set_delta_compression_lowgain_only();
+/** Compress and store all available ATWD channels for beacons, lowest gain for SPEs */
+void hal_FPGA_DOMAPP_set_delta_compression_lowgain_allbeacon();
+
 /**
  * lookback memory pointer access mask -- we only use
  * the lower 24 bits (16M bytes) to access memory...
@@ -274,14 +307,17 @@ hal_FPGA_DOMAPP_lbm_pointer(void);
  * \see hal_FPGA_DOMAPP_lc_enable
  */
 typedef enum {
-   /** enable sending up */
-   HAL_FPGA_DOMAPP_LC_ENABLE_SEND_UP   = 1,
-   /** enable sending down */
-   HAL_FPGA_DOMAPP_LC_ENABLE_SEND_DOWN = 2,
-   /** enable rcv up */
-   HAL_FPGA_DOMAPP_LC_ENABLE_RCV_UP    = 4,
-   /** enable rcv down */
-   HAL_FPGA_DOMAPP_LC_ENABLE_RCV_DOWN  = 8
+  /** enable sending up */
+  HAL_FPGA_DOMAPP_LC_ENABLE_SEND_UP   = (1<<0),
+  /** enable sending down */
+  HAL_FPGA_DOMAPP_LC_ENABLE_SEND_DOWN = (1<<1),
+  /** enable rcv up */
+  HAL_FPGA_DOMAPP_LC_ENABLE_RCV_UP    = (1<<2),
+  /** enable rcv down */
+  HAL_FPGA_DOMAPP_LC_ENABLE_RCV_DOWN  = (1<<3),
+  /** enable rcv up && down requirement 
+      (must assert along with RCV_UP and RCV_DOWN */
+  HAL_FPGA_DOMAPP_LC_ENABLE_RECV_UP_AND_DOWN = (1<<6)
 } HAL_FPGA_DOMAPP_LC_ENABLES;
 
 /**
@@ -335,12 +371,21 @@ hal_FPGA_DOMAPP_lc_disc_mpe(void);
 /**
  * set pre and post discriminator windows...
  *
- * \param pre pre-discriminator window in ns (100ns .. 6200ns)
- * \param post post-discriminator window in ns (100ns .. 6200ns)
+ * \param pre pre-discriminator window in ns (25ns .. 1600ns)
+ * \param post post-discriminator window in ns (25ns .. 1600ns)
  * \return 0 ok, non-zero, invalid window
  */
 int
 hal_FPGA_DOMAPP_lc_windows(int pre, int post);
+
+/**
+ * set self-LC discriminator window
+ *
+ * \param self self-discriminator window in ns (25ns .. 1600ns)
+ * \return 0 ok, non-zero, invalid window
+ */
+int
+hal_FPGA_DOMAPP_self_lc_window(int self);
 
 /**
  * calibration modes
@@ -492,7 +537,9 @@ hal_FPGA_DOMAPP_FB_get_attn(void);
 typedef enum {
    HAL_FPGA_DOMAPP_RATE_MONITOR_OFF = 0,
    HAL_FPGA_DOMAPP_RATE_MONITOR_SPE = 1,
-   HAL_FPGA_DOMAPP_RATE_MONITOR_MPE = 2
+   HAL_FPGA_DOMAPP_RATE_MONITOR_MPE = 2,
+   HAL_FPGA_DOMAPP_RATE_MONITOR_DEADTIME_ATWD_A = (1<<8),
+   HAL_FPGA_DOMAPP_RATE_MONITOR_DEADTIME_ATWD_B = (2<<8)
 } HAL_FPGA_DOMAPP_RATE_MONITORS;
 
 /**
@@ -551,6 +598,12 @@ hal_FPGA_DOMAPP_spe_rate_immediate(void);
  */
 unsigned
 hal_FPGA_DOMAPP_mpe_rate_immediate(void);
+
+/** 
+ * get deadtime 
+ */
+unsigned
+hal_FPGA_DOMAPP_deadtime_immediate(void);
 
 /**
  * supernova modes
@@ -626,56 +679,48 @@ void
 hal_FPGA_DOMAPP_R2R_ladder(const unsigned char *pattern);
 
 /**
- * roadgrader: set all thresholds to zero
- */
+ * Enable IceTop-mode charge stamps
+ */ 
 void
-hal_FPGA_DOMAPP_RG_set_zero_threshold(void);
+hal_FPGA_DOMAPP_enable_icetop_chargestamp(void);
 
 /**
- * roadgrader: clear all thresholds to zero
+ * Disable IceTop-mode charge stamps
  */
 void
-hal_FPGA_DOMAPP_RG_clear_zero_threshold(void);
+hal_FPGA_DOMAPP_disable_icetop_chargestamp(void);
 
 /**
- * roadgrader, compress only the last ATWD channel
+ * Set mode and channel for IceTop charge stamps - 
+ * must be <= FPGABIT(ICETOP_CONTROL, CHANNEL) (see DOM_FPGA_domapp_regs.h)
  */
-void
-hal_FPGA_DOMAPP_RG_compress_last_only(void);
+typedef enum {
+  HAL_FPGA_DOMAPP_ICETOP_MODE_AUTO=0,
+  HAL_FPGA_DOMAPP_ICETOP_MODE_CHAN=1,
+} HAL_FPGA_DOMAPP_ICETOP_MODES;
 
-/**
- * roadgrader, compress all ATWD channels
- */
 void
-hal_FPGA_DOMAPP_RG_compress_all(void);
-
-/**
- * roadgrader, set FADC threshold
- *
- * \param thresh threshold (0..1023)
- */
-void
-hal_FPGA_DOMAPP_RG_fadc_threshold(short thresh);
-
-/**
- * roadgrader, set ATWD thresholds
- *
- * \param chip (0=A..1=B)
- * \param channel (0..3)
- * \param thresh threshold (0..1023)
- */
-void
-hal_FPGA_DOMAPP_RG_atwd_threshold(short chip, short channel, short thresh);
-
-typedef struct HALDOMAPPRegStruct {
-   const char *name;
-   unsigned reg;
-} HALDOMAPPReg;
+hal_FPGA_DOMAPP_set_icetop_chargestamp_mode(HAL_FPGA_DOMAPP_ICETOP_MODES mode, 
+					    int chan);
 
 /**
  * debugging only...
  */
+typedef struct HALDOMAPPRegStruct {
+  const char *name;
+  unsigned reg;
+} HALDOMAPPReg;
+
 int
 hal_FPGA_DOMAPP_dump_regs(HALDOMAPPReg *regs, int n);
+
+/**
+ * Turn on/off icetop minbias mode
+ */
+void
+hal_FPGA_DOMAPP_enable_minbias(void);
+void
+hal_FPGA_DOMAPP_disable_minbias(void);
+
 
 #endif

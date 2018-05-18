@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_pld.h
  *
- * $Revision: 1.35 $
+ * $Revision: 1.1.1.15 $
  * $Author: arthur $
- * $Date: 2005-08-19 07:30:46 $
+ * $Date: 2006-07-21 19:36:31 $
  *
  * \b Usage:
  * \code
@@ -690,11 +690,11 @@ typedef enum {
    /** Flasher board LED current*/
    DOM_HAL_MUX_FLASHER_LED_CURRENT,
 
-   /** Local Coincidence Signal (upper) */
-   DOM_HAL_MUX_UPPER_LOCAL_COINCIDENCE,
-
    /** Local Coincidence Signal (lower) */
    DOM_HAL_MUX_LOWER_LOCAL_COINCIDENCE,
+
+   /** Local Coincidence Signal (upper) */
+   DOM_HAL_MUX_UPPER_LOCAL_COINCIDENCE,
 
    /** Communications ADC input signal */
    DOM_HAL_MUX_COMM_ADC_INPUT,

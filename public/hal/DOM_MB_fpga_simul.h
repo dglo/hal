@@ -4,9 +4,9 @@
 /**
  * \file DOM_MB_fpga.h
  *
- * $Revision: 1.5 $
- * $Author: mcp $
- * $Date: 2003-05-28 01:09:02 $
+ * $Revision: 1.1.1.15 $
+ * $Author: arthur $
+ * $Date: 2006-07-21 19:36:31 $
  *
  * \b Usage:
  * \code
